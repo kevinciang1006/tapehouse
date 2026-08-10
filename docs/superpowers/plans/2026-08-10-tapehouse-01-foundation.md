@@ -504,7 +504,7 @@ return [
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `vendor/bin/pest tests/Unit/TapehouseConfigTest.php`
-Expected: PASS — 19 dataset cases plus the three behavioural tests.
+Expected: PASS — 19 dataset cases plus the four behavioural tests.
 
 - [ ] **Step 5: Add the Tapehouse keys to both env files**
 
@@ -1258,6 +1258,7 @@ use App\Models\Symbol;
 use App\Models\Tick;
 use App\Models\User;
 use App\Models\Watchlist;
+use Carbon\CarbonImmutable;
 
 it('casts the symbol asset type to an enum', function (): void {
     $symbol = Symbol::factory()->create(['asset_type' => AssetType::Forex]);
@@ -1341,6 +1342,24 @@ it('round-trips eight decimal places without narrowing through a float', functio
     // column would silently narrow every price the system ever reads.
     expect($fresh->price)->toBeString()->toBe('12345.12345678')
         ->and($fresh->day_change)->toBeString()->toBe('-0.00000001');
+});
+
+it('preserves sub-second precision through the eloquent write path', function (): void {
+    $quotedAt = CarbonImmutable::parse('2026-08-10 12:00:00.123456');
+
+    $tick = Tick::factory()->create([
+        'quoted_at' => $quotedAt,
+        'received_at' => $quotedAt->addMilliseconds(40),
+    ]);
+
+    $fresh = $tick->refresh();
+
+    // The lag between these two is the number the ops panel reports. Laravel's
+    // default date format has no fractional part, so without $dateFormat both
+    // collapse to the same whole second and the lag reads as zero.
+    expect($fresh->quoted_at->format('u'))->toBe('123456')
+        ->and($fresh->received_at->format('u'))->toBe('163456')
+        ->and($fresh->received_at->diffInMilliseconds($fresh->quoted_at))->toBe(-40.0);
 });
 ```
 
@@ -1499,6 +1518,15 @@ class Tick extends Model
      */
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it — so without this every
+     * write truncates to whole seconds regardless of the column's declared
+     * precision. On ticks that would destroy received_at - quoted_at, which is
+     * the ingest lag the ops panel reports.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'symbol_id',
         'price',
@@ -1549,6 +1577,13 @@ class FeedEvent extends Model
 
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = ['level', 'type', 'message', 'context', 'occurred_at'];
 
     /** @return array<string, string> */
@@ -1583,6 +1618,13 @@ class AlertRule extends Model
 {
     /** @use HasFactory<\Database\Factories\AlertRuleFactory> */
     use HasFactory;
+
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
 
     protected $fillable = [
         'user_id',
@@ -1646,6 +1688,13 @@ class AlertEvent extends Model
     use HasFactory;
 
     public $timestamps = false;
+
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
 
     protected $fillable = ['alert_rule_id', 'price', 'fired_at'];
 
@@ -1894,7 +1943,7 @@ class AlertEventFactory extends Factory
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `vendor/bin/pest tests/Feature/ModelsTest.php`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 7: Run the gates and commit**
 

@@ -16,6 +16,13 @@ class AlertEvent extends Model
 
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = ['alert_rule_id', 'price', 'fired_at'];
 
     /** @return BelongsTo<AlertRule, $this> */

@@ -14,6 +14,7 @@ use App\Models\Symbol;
 use App\Models\Tick;
 use App\Models\User;
 use App\Models\Watchlist;
+use Carbon\CarbonImmutable;
 
 it('casts the symbol asset type to an enum', function (): void {
     $symbol = Symbol::factory()->create(['asset_type' => AssetType::Forex]);
@@ -97,4 +98,22 @@ it('round-trips eight decimal places without narrowing through a float', functio
     // column would silently narrow every price the system ever reads.
     expect($fresh->price)->toBeString()->toBe('12345.12345678')
         ->and($fresh->day_change)->toBeString()->toBe('-0.00000001');
+});
+
+it('preserves sub-second precision through the eloquent write path', function (): void {
+    $quotedAt = CarbonImmutable::parse('2026-08-10 12:00:00.123456');
+
+    $tick = Tick::factory()->create([
+        'quoted_at' => $quotedAt,
+        'received_at' => $quotedAt->addMilliseconds(40),
+    ]);
+
+    $fresh = $tick->refresh();
+
+    // The lag between these two is the number the ops panel reports. Laravel's
+    // default date format has no fractional part, so without $dateFormat both
+    // collapse to the same whole second and the lag reads as zero.
+    expect($fresh->quoted_at->format('u'))->toBe('123456')
+        ->and($fresh->received_at->format('u'))->toBe('163456')
+        ->and($fresh->received_at->diffInMilliseconds($fresh->quoted_at))->toBe(-40.0);
 });

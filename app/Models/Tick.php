@@ -21,6 +21,15 @@ class Tick extends Model
      */
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it — so without this every
+     * write truncates to whole seconds regardless of the column's declared
+     * precision. On ticks that would destroy received_at - quoted_at, which is
+     * the ingest lag the ops panel reports.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'symbol_id',
         'price',
