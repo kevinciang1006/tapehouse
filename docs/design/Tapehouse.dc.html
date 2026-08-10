@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#EDEEF2; }
+  * { box-sizing:border-box; }
+  a { color:#1A56DB; text-decoration:none; }
+  a:hover { color:#0B1220; }
+  :focus-visible { outline:2px solid #1A56DB; outline-offset:2px; }
+</style>
+</helmet>
+
+<div style="display:flex; flex-direction:column; gap:56px; padding:56px; font-family:Inter,sans-serif; align-items:flex-start;">
+
+  <div style="display:flex; flex-direction:column; gap:14px;">
+    <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">01 — Console · 1440 × 900 · polling fallback</div>
+    <div style="width:1440px; height:900px; background:#FBFBFD; color:#0B1220; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 1px 0 #D9DDE6, 0 24px 60px rgba(11,18,32,0.10);">
+
+      <div style="height:48px; flex:none; display:flex; align-items:center; gap:28px; padding:0 20px; border-bottom:1px solid #E4E8EF; background:#FFFFFF;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.14em;">TAPEHOUSE</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="width:7px; height:7px; border-radius:50%; border:1.5px solid #6B7789; background:transparent;"></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums; color:#0B1220;">{{ driverText }}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-left:4px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">credits</div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div style="width:11px; height:5px; background:#0B1220;"></div>
+            <div style="width:11px; height:5px; background:#0B1220;"></div>
+            <div style="width:11px; height:5px; background:#0B1220;"></div>
+            <div style="width:11px; height:5px; background:#0B1220;"></div>
+            <div style="width:11px; height:5px; background:#0B1220;"></div>
+            <div style="width:11px; height:5px; background:#E4E8EF;"></div>
+            <div style="width:11px; height:5px; background:#E4E8EF;"></div>
+            <div style="width:11px; height:5px; background:#E4E8EF;"></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">5/8</div>
+        </div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:24px;">
+          <div style="display:flex; align-items:baseline; gap:8px;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">lag</div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">{{ lagText }}</div>
+          </div>
+          <button style="font-family:Inter,sans-serif; font-size:12px; font-weight:500; color:#0B1220; background:#FFFFFF; border:1px solid #E4E8EF; padding:6px 12px; cursor:pointer;" style-hover="border-color:#0B1220;">Stop feed</button>
+        </div>
+      </div>
+
+      <sc-if value="{{ degraded }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:none; height:34px; display:flex; align-items:center; padding:0 20px; border-bottom:1px solid #E4E8EF; background:#FFFFFF; font-size:12px; color:#0B1220;">Credit budget spent. Polling rotates through symbols until the next refill.</div>
+      </sc-if>
+
+      <div style="flex:1; display:flex; min-height:0;">
+
+        <div style="width:56px; flex:none; border-right:1px solid #E4E8EF; background:#FFFFFF; display:flex; flex-direction:column; align-items:center; padding-top:14px; gap:18px;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:100%; padding:6px 0; box-shadow:inset 2px 0 0 #1A56DB;">
+            <div style="width:14px; height:14px; border:1.5px solid #0B1220;"></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#0B1220;">tape</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:100%; padding:6px 0; cursor:pointer;" style-hover="box-shadow:inset 2px 0 0 #E4E8EF;">
+            <div style="width:14px; height:14px; border:1.5px solid #6B7789; border-radius:50%;"></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">ops</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:100%; padding:6px 0; cursor:pointer;" style-hover="box-shadow:inset 2px 0 0 #E4E8EF;">
+            <div style="width:14px; height:14px; border:1.5px solid #6B7789; transform:rotate(45deg);"></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">alrt</div>
+          </div>
+        </div>
+
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:#FFFFFF; border-right:1px solid #E4E8EF;">
+          <div style="height:44px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid #E4E8EF;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">The tape</div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6B7789; font-variant-numeric:tabular-nums;">10 symbols</div>
+              <button style="font-family:Inter,sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#1A56DB; border:none; padding:7px 13px; cursor:pointer;" style-hover="background:#0B1220;">Add symbol</button>
+            </div>
+          </div>
+          <div style="flex:1; overflow:auto;">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="10">
+              <div style="height:52px; display:flex; flex-direction:column; justify-content:center; gap:3px; padding:0 20px 0 18px; border-bottom:1px solid #E4E8EF; border-left:{{ r.leftBorder }}; cursor:default;" style-hover="box-shadow:inset 1px 0 0 #1A56DB;">
+                <div style="display:flex; align-items:baseline; gap:9px;">
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; letter-spacing:0.02em;">{{ r.sym }}</div>
+                  <div style="font-size:11.5px; color:#6B7789;">{{ r.name }}</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 124px 84px 54px; align-items:baseline; background:{{ r.flashBg }}; transition:{{ r.flashTransition }}; margin:0 -6px; padding:1px 6px;">
+                  <div style="display:flex; justify-content:flex-end; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:500; font-variant-numeric:tabular-nums;">
+                    <div style="width:92px; text-align:right;">{{ r.intPart }}</div>
+                    <div style="width:64px; text-align:left; color:#6B7789;">{{ r.fracPart }}</div>
+                  </div>
+                  <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-variant-numeric:tabular-nums; color:{{ r.dirColor }};">{{ r.chg }}</div>
+                  <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-variant-numeric:tabular-nums; color:{{ r.dirColor }};">{{ r.pct }}</div>
+                  <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums; color:{{ r.ageColor }};">{{ r.age }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="width:320px; flex:none; background:#FFFFFF; display:flex; flex-direction:column;">
+          <div style="height:44px; flex:none; display:flex; align-items:center; padding:0 18px; border-bottom:1px solid #E4E8EF;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">Ops</div>
+          </div>
+          <div style="flex:none; padding:14px 18px 16px; display:flex; flex-direction:column; gap:9px; border-bottom:1px solid #E4E8EF;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="font-size:12px; color:#6B7789;">driver</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">{{ driverText }}</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="font-size:12px; color:#6B7789;">credits</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">5/8 · refill 14m03s</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="font-size:12px; color:#6B7789;">lag p50 / p95</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">34ms / 96ms</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="font-size:12px; color:#6B7789;">reconnects</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">3</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="font-size:12px; color:#6B7789;">queue depth</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-variant-numeric:tabular-nums;">12</div>
+            </div>
+          </div>
+          <div style="height:44px; flex:none; display:flex; align-items:center; padding:0 18px; border-bottom:1px solid #E4E8EF;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">Event log</div>
+          </div>
+          <div style="flex:1; overflow:auto;">
+            <sc-for list="{{ events }}" as="e" hint-placeholder-count="8">
+              <div style="padding:9px 18px; border-bottom:1px solid #E4E8EF; display:flex; flex-direction:column; gap:3px;">
+                <div style="display:flex; align-items:baseline; gap:9px;">
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7789; font-variant-numeric:tabular-nums;">{{ e.ts }}</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#0B1220; font-weight:{{ e.weight }};">{{ e.level }}</div>
+                </div>
+                <div style="font-size:12px; color:#0B1220; line-height:1.35; text-wrap:pretty;">{{ e.msg }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:56px; align-items:flex-start;">
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">02 — Right panel · alerts</div>
+      <div style="width:320px; height:852px; background:#FFFFFF; color:#0B1220; display:flex; flex-direction:column; border-left:1px solid #E4E8EF; box-shadow:0 1px 0 #D9DDE6, 0 24px 60px rgba(11,18,32,0.10);">
+        <div style="height:44px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 18px; border-bottom:1px solid #E4E8EF;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">Alert rules</div>
+          <button style="font-family:Inter,sans-serif; font-size:12px; font-weight:500; color:#FFFFFF; background:#1A56DB; border:none; padding:6px 11px; cursor:pointer;" style-hover="background:#0B1220;">Create rule</button>
+        </div>
+        <div style="flex:none;">
+          <sc-for list="{{ rules }}" as="u" hint-placeholder-count="5">
+            <div style="padding:10px 18px; border-bottom:1px solid #E4E8EF; display:flex; align-items:center; gap:10px;" style-hover="box-shadow:inset 1px 0 0 #1A56DB;">
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600;">{{ u.sym }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6B7789; font-variant-numeric:tabular-nums;">{{ u.cond }}</div>
+              </div>
+              <div style="width:34px; height:18px; flex:none; border:1px solid {{ u.toggleBorder }}; background:{{ u.toggleBg }}; display:flex; align-items:center; padding:2px; justify-content:{{ u.toggleJustify }}; cursor:pointer;">
+                <div style="width:12px; height:12px; background:{{ u.knob }};"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:44px; flex:none; display:flex; align-items:center; padding:0 18px; border-bottom:1px solid #E4E8EF; border-top:1px solid #E4E8EF;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">Fired</div>
+        </div>
+        <div style="flex:1; overflow:auto;">
+          <sc-for list="{{ fired }}" as="f" hint-placeholder-count="6">
+            <div style="padding:9px 18px; border-bottom:1px solid #E4E8EF; display:flex; flex-direction:column; gap:3px;">
+              <div style="display:flex; align-items:baseline; gap:9px;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7789; font-variant-numeric:tabular-nums;">{{ f.ts }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;">{{ f.sym }}</div>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#0B1220; font-variant-numeric:tabular-nums;">{{ f.detail }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789;">03 — Login · 1440 × 900</div>
+      <div style="width:1064px; height:852px; background:#FBFBFD; color:#0B1220; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 0 #D9DDE6, 0 24px 60px rgba(11,18,32,0.10);">
+        <div style="width:360px; background:#FFFFFF; border:1px solid #E4E8EF; padding:32px 32px 28px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; letter-spacing:0.14em;">TAPEHOUSE</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#6B7789; margin-top:6px;">Operator sign in</div>
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:26px;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label style="font-size:12px; color:#6B7789;" for="tp-email">Email</label>
+              <input id="tp-email" type="email" value="ops@tapehouse.io" style="font-family:Inter,sans-serif; font-size:13px; color:#0B1220; background:#FFFFFF; border:1px solid #E4E8EF; padding:9px 10px; width:100%;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label style="font-size:12px; color:#6B7789;" for="tp-pass">Password</label>
+              <input id="tp-pass" type="password" value="............" style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.12em; color:#0B1220; background:#FFFFFF; border:1px solid #1A56DB; box-shadow:0 0 0 2px rgba(26,86,219,0.18); padding:9px 10px; width:100%;">
+            </div>
+            <button style="font-family:Inter,sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; background:#1A56DB; border:none; padding:11px 12px; cursor:pointer; margin-top:4px;" style-hover="background:#0B1220;">Sign in</button>
+          </div>
+          <div style="margin-top:22px; padding-top:16px; border-top:1px solid #E4E8EF; font-size:11.5px; line-height:1.5; color:#6B7789; text-wrap:pretty;">Demo instance running on a Twelve Data trial key. Streaming falls back to polling when credits run out.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;degraded&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Feed state&quot;},&quot;flashOpacity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.12,&quot;min&quot;:0.04,&quot;max&quot;:0.28,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Tape&quot;},&quot;tickRate&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:620,&quot;min&quot;:200,&quot;max&quot;:2000,&quot;step&quot;:20,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Tape&quot;}}">
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.seed = [
+      { sym: 'AAPL', name: 'Apple Inc', px: 228.41, prev: 226.59, dec: 2, age: 2 },
+      { sym: 'MSFT', name: 'Microsoft Corp', px: 417.06, prev: 419.37, dec: 2, age: 4 },
+      { sym: 'NVDA', name: 'NVIDIA Corp', px: 118.29, prev: 114.85, dec: 2, age: 1 },
+      { sym: 'SPY', name: 'SPDR S&P 500 ETF', px: 541.83, prev: 540.12, dec: 2, age: 6 },
+      { sym: 'EUR/USD', name: 'Euro / US Dollar', px: 1.08234, prev: 1.08275, dec: 5, age: 1 },
+      { sym: 'GBP/USD', name: 'Pound Sterling / US Dollar', px: 1.27415, prev: 1.27353, dec: 5, age: 3 },
+      { sym: 'USD/JPY', name: 'US Dollar / Japanese Yen', px: 157.11842, prev: 157.44210, dec: 5, age: 74, frozen: true },
+      { sym: 'BTC/USD', name: 'Bitcoin / US Dollar', px: 94102.50, prev: 93290.30, dec: 2, age: 0 },
+      { sym: 'ETH/USD', name: 'Ether / US Dollar', px: 3182.44, prev: 3203.50, dec: 2, age: 2 },
+      { sym: 'XAU/USD', name: 'Gold / US Dollar', px: 2411.88, prev: 2398.04, dec: 2, age: 41, frozen: true }
+    ].map(function (r) { return Object.assign({}, r, { flashOn: false, dir: 1 }); });
+    this.state = { rows: this.seed, rm: false };
+  }
+
+  componentDidMount() {
+    try { this.setState({ rm: window.matchMedia('(prefers-reduced-motion: reduce)').matches }); } catch (e) {}
+    var self = this;
+    [0, 180, 340, 520].forEach(function (d, i) { setTimeout(function () { self.tick(i); }, d + 120); });
+    this.iv = setInterval(function () {
+      var live = self.state.rows.map(function (r, i) { return r.frozen ? -1 : i; }).filter(function (i) { return i >= 0; });
+      self.tick(live[Math.floor(Math.random() * live.length)]);
+    }, this.props.tickRate || 620);
+    this.ageIv = setInterval(function () {
+      self.setState(function (s) { return { rows: s.rows.map(function (r) { return Object.assign({}, r, { age: r.age + 1 }); }) }; });
+    }, 1000);
+  }
+
+  componentWillUnmount() { clearInterval(this.iv); clearInterval(this.ageIv); }
+
+  tick(idx) {
+    if (idx == null || idx < 0) return;
+    var self = this;
+    this.setState(function (s) {
+      var rows = s.rows.slice();
+      var r = Object.assign({}, rows[idx]);
+      var step = r.px * (Math.random() * 0.0009 + 0.00005) * (Math.random() < 0.5 ? -1 : 1);
+      r.px = Math.max(0.00001, r.px + step);
+      r.dir = step >= 0 ? 1 : -1;
+      r.age = 0;
+      r.flashOn = true;
+      rows[idx] = r;
+      return { rows: rows };
+    });
+    setTimeout(function () {
+      self.setState(function (s) {
+        var rows = s.rows.slice();
+        if (!rows[idx]) return null;
+        rows[idx] = Object.assign({}, rows[idx], { flashOn: false });
+        return { rows: rows };
+      });
+    }, 40);
+  }
+
+  fmt(v, dec) { return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
+
+  agefmt(s) { return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's'; }
+
+  renderVals() {
+    var self = this;
+    var UP = '#067A53', DOWN = '#C2334D';
+    var op = this.props.flashOpacity != null ? this.props.flashOpacity : 0.12;
+    var rm = this.state.rm;
+    var degraded = this.props.degraded !== false;
+
+    var rows = this.state.rows.map(function (r) {
+      var chg = r.px - r.prev;
+      var pct = (chg / r.prev) * 100;
+      var s = self.fmt(r.px, r.dec).split('.');
+      var stale = r.age > 30;
+      var up = chg >= 0;
+      var flashCol = r.dir >= 0 ? '6,122,83' : '194,51,77';
+      return {
+        sym: r.sym,
+        name: r.name,
+        intPart: s[0],
+        fracPart: '.' + s[1],
+        chg: (up ? '+' : '−') + self.fmt(Math.abs(chg), r.dec),
+        pct: (up ? '+' : '−') + Math.abs(pct).toFixed(2) + '%',
+        age: self.agefmt(r.age),
+        ageColor: stale ? '#6B7789' : '#0B1220',
+        dirColor: up ? UP : DOWN,
+        leftBorder: stale ? '2px solid #6B7789' : '2px solid transparent',
+        flashBg: rm ? 'transparent' : (r.flashOn ? 'rgba(' + flashCol + ',' + op + ')' : 'rgba(' + flashCol + ',0)'),
+        flashTransition: r.flashOn ? 'none' : 'background-color 600ms cubic-bezier(0.16,1,0.3,1)'
+      };
+    });
+
+    return {
+      rows: rows,
+      degraded: degraded,
+      driverText: degraded ? 'polling · 0m41s' : 'websocket · 4m12s',
+      lagText: degraded ? '1420ms' : '34ms',
+      events: [
+        { ts: '12:04:11', level: 'warn', weight: 600, msg: 'ws demoted → polling. credit budget exhausted.' },
+        { ts: '12:03:58', level: 'info', weight: 400, msg: 'rotation set to 10 symbols, 4s interval' },
+        { ts: '12:03:57', level: 'warn', weight: 600, msg: 'credit 5/8 spent on XAU/USD subscription' },
+        { ts: '12:01:20', level: 'info', weight: 400, msg: 'USD/JPY stale 74s — last tick 12:00:06' },
+        { ts: '11:58:44', level: 'info', weight: 400, msg: 'reconnect #3 succeeded in 812ms' },
+        { ts: '11:58:43', level: 'warn', weight: 600, msg: 'socket closed 1006, retrying' },
+        { ts: '11:52:09', level: 'info', weight: 400, msg: 'rule BTC/USD change% < -2.00 fired' },
+        { ts: '11:41:02', level: 'info', weight: 400, msg: 'session opened by ops@tapehouse.io' }
+      ],
+      rules: [
+        { sym: 'AAPL', cond: 'price > 230.00', on: true },
+        { sym: 'BTC/USD', cond: 'change% < -2.00', on: true },
+        { sym: 'EUR/USD', cond: 'price < 1.07500', on: false },
+        { sym: 'NVDA', cond: 'change% > 5.00', on: true },
+        { sym: 'USD/JPY', cond: 'price > 158.00000', on: false },
+        { sym: 'XAU/USD', cond: 'stale > 60s', on: true }
+      ].map(function (u) {
+        return Object.assign({}, u, {
+          toggleBorder: u.on ? '#1A56DB' : '#E4E8EF',
+          toggleBg: u.on ? '#1A56DB' : '#FFFFFF',
+          toggleJustify: u.on ? 'flex-end' : 'flex-start',
+          knob: u.on ? '#FFFFFF' : '#6B7789'
+        });
+      }),
+      fired: [
+        { ts: '11:52:09', sym: 'BTC/USD', detail: 'change% < -2.00 → -2.14%' },
+        { ts: '10:37:41', sym: 'AAPL', detail: 'price > 230.00 → 230.06' },
+        { ts: '09:48:02', sym: 'NVDA', detail: 'change% > 5.00 → +5.31%' },
+        { ts: '09:31:15', sym: 'XAU/USD', detail: 'stale > 60s → 96s' },
+        { ts: '08:14:53', sym: 'AAPL', detail: 'price > 230.00 → 230.44' },
+        { ts: '07:59:38', sym: 'BTC/USD', detail: 'change% < -2.00 → -2.02%' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
