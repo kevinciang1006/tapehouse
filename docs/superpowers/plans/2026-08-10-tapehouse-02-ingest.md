@@ -341,8 +341,13 @@ final readonly class CreditBudget
      */
     private function run(int $requested): array
     {
+        // `command('eval', ...)` rather than `->eval(...)`: Connection is
+        // declared `@mixin \Redis`, so static analysis resolves a direct
+        // ->eval() against phpredis's native signature instead of Laravel's
+        // flattened one. `command()` is a real method on Connection and is
+        // runtime-identical here — PredisConnection defines no eval() override.
         /** @var array{0: int, 1: int} $result */
-        $result = $this->redis->eval(
+        $result = $this->redis->command('eval', [
             self::SCRIPT,
             2,
             self::TOKENS_KEY,
@@ -351,7 +356,7 @@ final readonly class CreditBudget
             (string) $this->refillPerMinute,
             (string) $this->now(),
             (string) $requested,
-        );
+        ]);
 
         return [(int) $result[0], (int) $result[1]];
     }
