@@ -1287,8 +1287,16 @@ it('casts feed event level and decodes jsonb context', function (): void {
         'context' => ['from' => 'websocket', 'to' => 'polling'],
     ]);
 
+    // Assert key by key, never `toBe()` on the whole array. PostgreSQL's jsonb
+    // stores object keys sorted by length then bytewise, so it hands back
+    // ['to' => ..., 'from' => ...] — and `toBe()` is `===`, which is
+    // order-sensitive for arrays. The reordering is jsonb working correctly,
+    // not a bug to design around: do not downgrade the column to `json` to
+    // make a whole-array comparison pass.
     expect($event->refresh()->level)->toBe(FeedEventLevel::Warn)
-        ->and($event->context)->toBe(['from' => 'websocket', 'to' => 'polling']);
+        ->and($event->context)->toHaveCount(2)
+        ->and($event->context['from'])->toBe('websocket')
+        ->and($event->context['to'])->toBe('polling');
 });
 
 it('casts alert rule metric and condition', function (): void {
