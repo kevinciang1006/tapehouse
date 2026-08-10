@@ -993,7 +993,12 @@ it('advances the cursor so the next tick polls the next slice', function (): voi
 
 it('wraps the cursor around the end of the list', function (): void {
     $r = new RequestRecorder;
-    $driver = driverWith(new MockHandler(pollingResponses(3)), $r, batch: 4);
+    // Capacity 12, not the default 8. The clock is frozen across all three
+    // ticks so nothing refills, and a correct non-wrapping driver spends
+    // 4 (A-D) + 2 (E,F truncated at the end) + 4 (A-D again) = 10 tokens.
+    // At capacity 8 the third tick would be cut to a partial grant by budget
+    // exhaustion, which is a different behaviour tested separately below.
+    $driver = driverWith(new MockHandler(pollingResponses(3)), $r, capacity: 12, batch: 4);
     $driver->start(['A', 'B', 'C', 'D', 'E', 'F'], fn (Quote $q) => null);
 
     $driver->tick();
@@ -1208,19 +1213,16 @@ final class PollingDriver implements UpstreamDriver
      */
     private function sliceFrom(int $cursor): array
     {
-        $count = count($this->tickers);
-
-        if ($count === 0) {
+        if ($this->tickers === []) {
             return [];
         }
 
-        $slice = [];
-
-        for ($i = 0; $i < min($this->batchSize, $count); $i++) {
-            $slice[] = $this->tickers[($cursor + $i) % $count];
-        }
-
-        return $slice;
+        // Non-wrapping on purpose. A slice that wrapped past the end would
+        // re-poll symbols the previous pass just covered, spending credits to
+        // refresh the freshest rows in the list. Truncating at the end and
+        // letting the cursor reset to 0 next pass costs one short request per
+        // cycle and keeps the rotation honest.
+        return array_slice($this->tickers, $cursor, $this->batchSize);
     }
 
     private function cursor(): int
