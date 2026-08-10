@@ -319,8 +319,11 @@ parameters:
         - database
         - routes
         - tests
-    checkModelProperties: true
 ```
+
+The spec mandates level 6 and nothing more. Do not add `checkModelProperties`
+— it demands property docblocks on every model and generates a large volume
+of findings unrelated to anything this project cares about.
 
 - [ ] **Step 8: Run all three gates**
 
