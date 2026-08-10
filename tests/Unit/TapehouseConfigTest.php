@@ -36,8 +36,15 @@ it('treats polling as stale later than websocket', function (): void {
         ->toBeGreaterThan(config('tapehouse.stale.websocket'));
 });
 
-it('escalates the promotion backoff and caps it', function (): void {
+it('pins the promotion backoff schedule', function (): void {
     $backoff = config('tapehouse.driver.promotion_backoff');
 
     expect($backoff)->toBe([60, 120, 300]);
+});
+
+it('defaults the simulated driver to off, so it never runs unasked', function (): void {
+    putenv('TAPEHOUSE_SIMULATOR_ENABLED');
+    unset($_ENV['TAPEHOUSE_SIMULATOR_ENABLED'], $_SERVER['TAPEHOUSE_SIMULATOR_ENABLED']);
+
+    expect((require base_path('config/tapehouse.php'))['simulator']['enabled'])->toBeFalse();
 });

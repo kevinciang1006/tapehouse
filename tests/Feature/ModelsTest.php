@@ -84,3 +84,17 @@ it('cascades deletes from symbol to tick', function (): void {
 
     expect(Tick::find($tick->id))->toBeNull();
 });
+
+it('round-trips eight decimal places without narrowing through a float', function (): void {
+    $tick = Tick::factory()->create([
+        'price' => '12345.12345678',
+        'day_change' => '-0.00000001',
+    ]);
+
+    $fresh = $tick->refresh();
+
+    // Postgres numerics must arrive as strings. A float cast on any money
+    // column would silently narrow every price the system ever reads.
+    expect($fresh->price)->toBeString()->toBe('12345.12345678')
+        ->and($fresh->day_change)->toBeString()->toBe('-0.00000001');
+});

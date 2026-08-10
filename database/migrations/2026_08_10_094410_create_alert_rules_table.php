@@ -19,7 +19,7 @@ return new class extends Migration
             $table->decimal('threshold', 18, 8);
             $table->boolean('is_active')->default(true);
             $table->unsignedInteger('cooldown_seconds')->default(60);
-            $table->timestampTz('last_fired_at')->nullable();
+            $table->timestampTz('last_fired_at', 3)->nullable();
             $table->timestamps();
 
             $table->index(['is_active', 'symbol_id']);

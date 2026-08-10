@@ -12,7 +12,7 @@ return new class extends Migration
     {
         Schema::create('watchlists', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
             $table->string('name', 64);
             $table->timestamps();
         });

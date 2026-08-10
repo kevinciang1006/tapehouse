@@ -17,8 +17,8 @@ return new class extends Migration
             $table->decimal('day_change', 18, 8)->nullable();
             $table->decimal('day_change_pct', 9, 4)->nullable();
             $table->string('source', 16);
-            $table->timestampTz('quoted_at');
-            $table->timestampTz('received_at');
+            $table->timestampTz('quoted_at', 6);
+            $table->timestampTz('received_at', 6);
 
             // No timestamps(): ticks are immutable, and an append-heavy table
             // should not carry two columns nothing ever reads.

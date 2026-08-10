@@ -14,9 +14,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('alert_rule_id')->constrained()->cascadeOnDelete();
             $table->decimal('price', 18, 8);
-            $table->timestampTz('fired_at');
+            $table->timestampTz('fired_at', 3);
 
             $table->index('fired_at');
+            $table->index('alert_rule_id');
         });
     }
 

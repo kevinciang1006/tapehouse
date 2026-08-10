@@ -16,17 +16,14 @@ it('creates every tapehouse table', function (string $table): void {
     'alert_events',
 ]);
 
-it('stores money as numeric, never float or string', function (string $table, string $column): void {
-    // Laravel reports the native Postgres type; accept either spelling rather
-    // than pinning the test to a driver-reporting detail. What must never
-    // appear here is a float type (double precision, real) or a text type.
-    expect(Schema::getColumnType($table, $column))->toBeIn(['numeric', 'decimal']);
+it('stores money as numeric at full precision, never float or string', function (string $table, string $column, string $definition): void {
+    expect(Schema::getColumnType($table, $column, true))->toBe($definition);
 })->with([
-    ['ticks', 'price'],
-    ['ticks', 'day_change'],
-    ['ticks', 'day_change_pct'],
-    ['alert_rules', 'threshold'],
-    ['alert_events', 'price'],
+    ['ticks', 'price', 'numeric(18,8)'],
+    ['ticks', 'day_change', 'numeric(18,8)'],
+    ['ticks', 'day_change_pct', 'numeric(9,4)'],
+    ['alert_rules', 'threshold', 'numeric(18,8)'],
+    ['alert_events', 'price', 'numeric(18,8)'],
 ]);
 
 it('gives symbols a per-symbol display precision', function (): void {

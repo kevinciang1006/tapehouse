@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('type', 64);
             $table->text('message');
             $table->jsonb('context')->nullable();
-            $table->timestampTz('occurred_at');
+            $table->timestampTz('occurred_at', 3);
 
             $table->index('occurred_at');
         });
