@@ -407,10 +407,17 @@ it('treats polling as stale later than websocket', function (): void {
         ->toBeGreaterThan(config('tapehouse.stale.websocket'));
 });
 
-it('escalates the promotion backoff and caps it', function (): void {
+it('pins the promotion backoff schedule', function (): void {
     $backoff = config('tapehouse.driver.promotion_backoff');
 
     expect($backoff)->toBe([60, 120, 300]);
+});
+
+it('defaults the simulated driver to off, so it never runs unasked', function (): void {
+    putenv('TAPEHOUSE_SIMULATOR_ENABLED');
+    unset($_ENV['TAPEHOUSE_SIMULATOR_ENABLED'], $_SERVER['TAPEHOUSE_SIMULATOR_ENABLED']);
+
+    expect((require base_path('config/tapehouse.php'))['simulator']['enabled'])->toBeFalse();
 });
 ```
 
@@ -497,7 +504,7 @@ return [
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `vendor/bin/pest tests/Unit/TapehouseConfigTest.php`
-Expected: PASS — 19 dataset cases plus the three behavioural tests.
+Expected: PASS — 19 dataset cases plus the four behavioural tests.
 
 - [ ] **Step 5: Add the Tapehouse keys to both env files**
 
@@ -860,17 +867,14 @@ it('creates every tapehouse table', function (string $table): void {
     'alert_events',
 ]);
 
-it('stores money as numeric, never float or string', function (string $table, string $column): void {
-    // Laravel reports the native Postgres type; accept either spelling rather
-    // than pinning the test to a driver-reporting detail. What must never
-    // appear here is a float type (double precision, real) or a text type.
-    expect(Schema::getColumnType($table, $column))->toBeIn(['numeric', 'decimal']);
+it('stores money as numeric at full precision, never float or string', function (string $table, string $column, string $definition): void {
+    expect(Schema::getColumnType($table, $column, true))->toBe($definition);
 })->with([
-    ['ticks', 'price'],
-    ['ticks', 'day_change'],
-    ['ticks', 'day_change_pct'],
-    ['alert_rules', 'threshold'],
-    ['alert_events', 'price'],
+    ['ticks', 'price', 'numeric(18,8)'],
+    ['ticks', 'day_change', 'numeric(18,8)'],
+    ['ticks', 'day_change_pct', 'numeric(9,4)'],
+    ['alert_rules', 'threshold', 'numeric(18,8)'],
+    ['alert_events', 'price', 'numeric(18,8)'],
 ]);
 
 it('gives symbols a per-symbol display precision', function (): void {
@@ -965,7 +969,7 @@ return new class extends Migration
     {
         Schema::create('watchlists', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
             $table->string('name', 64);
             $table->timestamps();
         });
@@ -1039,8 +1043,8 @@ return new class extends Migration
             $table->decimal('day_change', 18, 8)->nullable();
             $table->decimal('day_change_pct', 9, 4)->nullable();
             $table->string('source', 16);
-            $table->timestampTz('quoted_at');
-            $table->timestampTz('received_at');
+            $table->timestampTz('quoted_at', 6);
+            $table->timestampTz('received_at', 6);
 
             // No timestamps(): ticks are immutable, and an append-heavy table
             // should not carry two columns nothing ever reads.
@@ -1085,7 +1089,7 @@ return new class extends Migration
             $table->string('type', 64);
             $table->text('message');
             $table->jsonb('context')->nullable();
-            $table->timestampTz('occurred_at');
+            $table->timestampTz('occurred_at', 3);
 
             $table->index('occurred_at');
         });
@@ -1129,7 +1133,7 @@ return new class extends Migration
             $table->decimal('threshold', 18, 8);
             $table->boolean('is_active')->default(true);
             $table->unsignedInteger('cooldown_seconds')->default(60);
-            $table->timestampTz('last_fired_at')->nullable();
+            $table->timestampTz('last_fired_at', 3)->nullable();
             $table->timestamps();
 
             $table->index(['is_active', 'symbol_id']);
@@ -1162,9 +1166,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('alert_rule_id')->constrained()->cascadeOnDelete();
             $table->decimal('price', 18, 8);
-            $table->timestampTz('fired_at');
+            $table->timestampTz('fired_at', 3);
 
             $table->index('fired_at');
+            $table->index('alert_rule_id');
         });
     }
 
@@ -1253,6 +1258,7 @@ use App\Models\Symbol;
 use App\Models\Tick;
 use App\Models\User;
 use App\Models\Watchlist;
+use Carbon\CarbonImmutable;
 
 it('casts the symbol asset type to an enum', function (): void {
     $symbol = Symbol::factory()->create(['asset_type' => AssetType::Forex]);
@@ -1287,8 +1293,16 @@ it('casts feed event level and decodes jsonb context', function (): void {
         'context' => ['from' => 'websocket', 'to' => 'polling'],
     ]);
 
+    // Assert key by key, never `toBe()` on the whole array. PostgreSQL's jsonb
+    // stores object keys sorted by length then bytewise, so it hands back
+    // ['to' => ..., 'from' => ...] — and `toBe()` is `===`, which is
+    // order-sensitive for arrays. The reordering is jsonb working correctly,
+    // not a bug to design around: do not downgrade the column to `json` to
+    // make a whole-array comparison pass.
     expect($event->refresh()->level)->toBe(FeedEventLevel::Warn)
-        ->and($event->context)->toBe(['from' => 'websocket', 'to' => 'polling']);
+        ->and($event->context)->toHaveCount(2)
+        ->and($event->context['from'])->toBe('websocket')
+        ->and($event->context['to'])->toBe('polling');
 });
 
 it('casts alert rule metric and condition', function (): void {
@@ -1314,6 +1328,38 @@ it('cascades deletes from symbol to tick', function (): void {
     $tick->symbol->delete();
 
     expect(Tick::find($tick->id))->toBeNull();
+});
+
+it('round-trips eight decimal places without narrowing through a float', function (): void {
+    $tick = Tick::factory()->create([
+        'price' => '12345.12345678',
+        'day_change' => '-0.00000001',
+    ]);
+
+    $fresh = $tick->refresh();
+
+    // Postgres numerics must arrive as strings. A float cast on any money
+    // column would silently narrow every price the system ever reads.
+    expect($fresh->price)->toBeString()->toBe('12345.12345678')
+        ->and($fresh->day_change)->toBeString()->toBe('-0.00000001');
+});
+
+it('preserves sub-second precision through the eloquent write path', function (): void {
+    $quotedAt = CarbonImmutable::parse('2026-08-10 12:00:00.123456');
+
+    $tick = Tick::factory()->create([
+        'quoted_at' => $quotedAt,
+        'received_at' => $quotedAt->addMilliseconds(40),
+    ]);
+
+    $fresh = $tick->refresh();
+
+    // The lag between these two is the number the ops panel reports. Laravel's
+    // default date format has no fractional part, so without $dateFormat both
+    // collapse to the same whole second and the lag reads as zero.
+    expect($fresh->quoted_at->format('u'))->toBe('123456')
+        ->and($fresh->received_at->format('u'))->toBe('163456')
+        ->and($fresh->received_at->diffInMilliseconds($fresh->quoted_at))->toBe(-40.0);
 });
 ```
 
@@ -1472,6 +1518,15 @@ class Tick extends Model
      */
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it — so without this every
+     * write truncates to whole seconds regardless of the column's declared
+     * precision. On ticks that would destroy received_at - quoted_at, which is
+     * the ingest lag the ops panel reports.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'symbol_id',
         'price',
@@ -1522,6 +1577,13 @@ class FeedEvent extends Model
 
     public $timestamps = false;
 
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = ['level', 'type', 'message', 'context', 'occurred_at'];
 
     /** @return array<string, string> */
@@ -1556,6 +1618,13 @@ class AlertRule extends Model
 {
     /** @use HasFactory<\Database\Factories\AlertRuleFactory> */
     use HasFactory;
+
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
 
     protected $fillable = [
         'user_id',
@@ -1619,6 +1688,13 @@ class AlertEvent extends Model
     use HasFactory;
 
     public $timestamps = false;
+
+    /**
+     * Laravel's base grammar formats dates as 'Y-m-d H:i:s' with no fractional
+     * part, and PostgresGrammar does not override it. Without it the
+     * precision(3) columns on this table cannot hold a fraction.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
 
     protected $fillable = ['alert_rule_id', 'price', 'fired_at'];
 
@@ -1867,7 +1943,7 @@ class AlertEventFactory extends Factory
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `vendor/bin/pest tests/Feature/ModelsTest.php`
-Expected: PASS, 7 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 7: Run the gates and commit**
 
@@ -2225,7 +2301,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] `vendor/bin/phpstan analyse` — `[OK] No errors` at level 6
 - [ ] `vendor/bin/pint --test` — clean
 - [ ] No `vite.config.js`, no Tailwind, no `database.sqlite` anywhere in the tree
-- [ ] `feature/foundation` merged into `develop`
+- [ ] `feature/foundation` merged into `develop` — deferred until after the whole-branch review; handled by the controller, not by Task 7
 
 ## What this plan does not build
 
