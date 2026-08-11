@@ -41,6 +41,34 @@ final class TapeIngest extends Command
     private array $symbolIds = [];
 
     /**
+     * Realistic opening prices for the simulated driver, keyed by the same
+     * tickers WatchlistSeeder attaches to the default watchlist. The tape's
+     * whole visual argument is that the decimal column holds across wildly
+     * different magnitudes — equities around 100s-with-2-decimals, forex
+     * around 1-with-5-decimals, crypto in the 10,000s needing a thousands
+     * separator. Seeding every ticker from the same flat 100.00 never
+     * exercises that: the walk only ever drifts a few cents in either
+     * direction, so BTC/USD renders as if it were a penny stock and the
+     * thousands-separator path in format.js never runs. These are
+     * plausible snapshots for a simulated demo, not live quotes; anything
+     * not listed here still falls back to 100.00.
+     *
+     * @var array<string, string>
+     */
+    private const SIMULATOR_SEED_PRICES = [
+        'AAPL' => '228.41',
+        'MSFT' => '417.06',
+        'NVDA' => '118.29',
+        'SPY' => '541.83',
+        'EUR/USD' => '1.08234',
+        'GBP/USD' => '1.27415',
+        'USD/JPY' => '157.11842',
+        'BTC/USD' => '94102.50',
+        'ETH/USD' => '3182.44',
+        'XAU/USD' => '2411.88',
+    ];
+
+    /**
      * Latest sample per symbol since the last dispatch, keyed by symbol id.
      * Evaluation runs on the queue and is dispatched once per broadcast
      * flush, never per tick — a slow rule must never be able to stall
@@ -218,7 +246,7 @@ final class TapeIngest extends Command
         if ((bool) $config->get('tapehouse.simulator.enabled')) {
             $seed = [];
             foreach ($tickers as $ticker) {
-                $seed[$ticker] = '100.00';
+                $seed[$ticker] = self::SIMULATOR_SEED_PRICES[$ticker] ?? '100.00';
             }
 
             return new SimulatedDriver($seed, (int) $config->get('tapehouse.simulator.interval_ms'));

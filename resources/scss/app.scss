@@ -2,6 +2,6 @@
 @use 'base';
 @use 'layout';
 @use 'tape';
+@use 'ops';
 
-// Later tasks add: ops (ops panel detail), alerts (alert rules + fired
-// panel), forms (generic form controls), auth (login screen chrome).
+// Later tasks add: alerts (alert rules + fired panel).

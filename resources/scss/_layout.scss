@@ -45,9 +45,13 @@
     background: transparent;
 }
 
+// Lit vs dark, not green vs red: up/down are reserved for price deltas and
+// the flash, so "the feed answered" reads as a filled ink dot, and "it
+// didn't" (a driver of stopped, or a failed health poll) falls back to the
+// base rule below — an empty, muted-bordered circle.
 .driver-dot.is-live {
-    border-color: var(--up);
-    background: var(--up);
+    border-color: var(--ink);
+    background: var(--ink);
 }
 
 .statusbar__credits {
