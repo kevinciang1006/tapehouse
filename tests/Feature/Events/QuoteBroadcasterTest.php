@@ -42,11 +42,9 @@ it('broadcasts once the window has elapsed', function (): void {
     Event::assertDispatched(QuotesUpdated::class);
 });
 
-it('coalesces many ticks into ONE event', function (): void {
+it('coalesces many ticks of one symbol into a single event', function (): void {
     $b = new QuoteBroadcaster(app('events'), 250);
 
-    // The whole point: a fast-moving symbol must not saturate the socket with
-    // one frame per tick.
     for ($i = 0; $i < 50; $i++) {
         $b->add(broadcastQuote(price: (string) (228 + $i)), 1);
     }
@@ -55,6 +53,25 @@ it('coalesces many ticks into ONE event', function (): void {
     $b->flushIfDue();
 
     Event::assertDispatchedTimes(QuotesUpdated::class, 1);
+});
+
+it('batches several distinct tickers for one user into a single event', function (): void {
+    $b = new QuoteBroadcaster(app('events'), 250);
+
+    // The one that matters in practice: a real tape has many symbols ticking
+    // at once. Keying by ticker alone would collapse a same-symbol burst even
+    // if flush() dispatched one frame per quote — only distinct tickers prove
+    // the batching.
+    foreach (['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC/USD'] as $ticker) {
+        $b->add(broadcastQuote($ticker), 1);
+    }
+
+    $b->flush();
+
+    Event::assertDispatchedTimes(QuotesUpdated::class, 1);
+    Event::assertDispatched(QuotesUpdated::class, function (QuotesUpdated $e): bool {
+        return count($e->quotes) === 5;
+    });
 });
 
 it('keeps only the latest price per ticker in the window', function (): void {

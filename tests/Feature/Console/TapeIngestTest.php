@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Events\FeedStateChanged;
+use App\Events\QuotesUpdated;
 use App\Models\FeedEvent;
 use App\Models\Symbol;
 use App\Models\Tick;
@@ -22,9 +24,11 @@ beforeEach(function (): void {
     // The driver manager and quote broadcaster now dispatch real
     // ShouldBroadcast events on every transition/flush. Nothing here asserts
     // on those events, and this suite has no Reverb server to receive them —
-    // without the fake, dispatch() reaches the Pusher-protocol broadcaster
-    // and every test fails on a real connection refused.
-    Event::fake();
+    // without the fake, dispatch() reaches the Pusher-protocol broadcaster and
+    // every test fails on a real connection refused. Scoped rather than a
+    // blanket fake so a listener added later on this command's path fails
+    // loudly instead of being silently swallowed.
+    Event::fake([QuotesUpdated::class, FeedStateChanged::class]);
 });
 
 function seedWatchlist(int $count = 3): void
