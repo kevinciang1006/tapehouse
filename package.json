@@ -20,7 +20,7 @@
         "webpack-manifest-plugin": "^6.0.1"
     },
     "dependencies": {
-        "jquery": "^4.0.0",
+        "jquery": "3.7.1",
         "laravel-echo": "^2.4.0",
         "pusher-js": "^8.6.0"
     }
