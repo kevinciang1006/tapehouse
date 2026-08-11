@@ -1,4 +1,5 @@
 import '../scss/app.scss';
 
-// Task 1 ships the static shell only. The tape, ops and alerts panels wire
-// up to Echo/the JSON API in later Plan 4 tasks.
+// Task 2 adds the frontend plumbing — modules/api.js, modules/format.js and
+// modules/echo.js — but nothing here imports them yet. The tape, ops and
+// alerts panels that consume them land in the next Plan 4 task.
