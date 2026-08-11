@@ -248,6 +248,22 @@
     flex-direction: column;
 }
 
+// The right panel holds two sibling views — ops (Task 4) and alerts (this
+// task) — and alerts.js's rail wiring toggles which one is unhidden. Each
+// view re-establishes the flex column .right-panel itself used to be
+// directly, so nothing inside (like .event-log-body's flex: 1) has to change
+// now that it is nested one level deeper.
+.right-panel__view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.right-panel__view[hidden] {
+    display: none;
+}
+
 .ops-stats {
     flex: none;
     padding: 14px 18px 16px;

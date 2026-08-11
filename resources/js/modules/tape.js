@@ -7,6 +7,13 @@
 // table — a full repaint would wipe out every row's in-flight flash and
 // collapse the tape's ambient shimmer, which is the entire personality of
 // the interface.
+//
+// addSymbol()/removeSymbol() extend that same rule to watchlist.js: adding
+// or removing a symbol inserts or deletes exactly one row rather than
+// re-rendering the table, so every other row's in-flight flash survives.
+// watchlist.js owns the fetch calls; this module stays the single owner of
+// #tape-rows' DOM and the rowsByTicker map so a newly-added row is wired
+// into the same quote-patching path as every row painted at mount.
 
 import { get } from './api.js';
 import * as format from './format.js';
@@ -14,6 +21,8 @@ import * as flash from './flash.js';
 import { tapeChannel, onReconnect } from './echo.js';
 
 const CONTAINER_ID = 'tape-rows';
+const EMPTY_STATE_ID = 'tape-empty';
+const SYMBOL_COUNT_ID = 'symbol-count';
 
 /** @type {Map<string, RowRefs>} */
 const rowsByTicker = new Map();
@@ -30,6 +39,7 @@ let ageTimer = null;
  * @property {HTMLElement} changeEl
  * @property {HTMLElement} pctEl
  * @property {HTMLElement} ageEl
+ * @property {number} id - the symbol id, so removeSymbol() can find this row without a ticker
  * @property {number} decimals
  * @property {number|null} prevPrice
  * @property {Date|null} quotedAt
@@ -41,6 +51,7 @@ export async function mount() {
     const tickers = symbols.map((symbol) => symbol.ticker);
 
     renderRows(symbols);
+    syncListMeta();
 
     const [health] = await Promise.all([
         get('/api/ops/health'),
@@ -69,6 +80,71 @@ export async function mount() {
 }
 
 /**
+ * Inserts one row and paints its first price — called by watchlist.js after
+ * a successful POST /api/watchlist/symbols. Never re-renders the table: that
+ * would wipe out every other row's in-flight flash.
+ *
+ * @param {{id: number, ticker: string, name: string, price_decimals: number}} symbol
+ */
+export function addSymbol(symbol) {
+    const container = document.getElementById(CONTAINER_ID);
+
+    if (!container || rowsByTicker.has(symbol.ticker)) {
+        return;
+    }
+
+    const refs = buildRow(symbol);
+    container.appendChild(refs.el);
+    rowsByTicker.set(symbol.ticker, refs);
+    syncListMeta();
+
+    paintSnapshot([symbol.ticker], { doFlash: false }).catch((error) => {
+        console.error('[tape] snapshot for new symbol failed', error);
+    });
+}
+
+/**
+ * Removes exactly one row — called by watchlist.js after a successful
+ * DELETE /api/watchlist/symbols/{symbolId}. Symbols are keyed by ticker for
+ * quote-patching, so this does a small linear scan for the matching id
+ * rather than keeping a second map in sync for a watchlist that is at most a
+ * few dozen rows.
+ *
+ * @param {number} symbolId
+ */
+export function removeSymbol(symbolId) {
+    const entry = [...rowsByTicker.entries()].find(([, refs]) => refs.id === symbolId);
+
+    if (!entry) {
+        return;
+    }
+
+    const [ticker, refs] = entry;
+    refs.el.remove();
+    rowsByTicker.delete(ticker);
+    syncListMeta();
+}
+
+/**
+ * Keeps the "N symbols" header count and the "No symbols yet…" empty state
+ * in sync with rowsByTicker — the one source of truth for what is on
+ * screen — after the initial render and every add/remove.
+ */
+function syncListMeta() {
+    const countEl = document.getElementById(SYMBOL_COUNT_ID);
+    const emptyEl = document.getElementById(EMPTY_STATE_ID);
+    const count = rowsByTicker.size;
+
+    if (countEl) {
+        countEl.textContent = `${count} symbols`;
+    }
+
+    if (emptyEl) {
+        emptyEl.hidden = count > 0;
+    }
+}
+
+/**
  * @param {Array<{id: number, ticker: string, name: string, price_decimals: number}>} symbols
  */
 function renderRows(symbols) {
@@ -89,13 +165,14 @@ function renderRows(symbols) {
 }
 
 /**
- * @param {{ticker: string, name: string, price_decimals: number}} symbol
+ * @param {{id: number, ticker: string, name: string, price_decimals: number}} symbol
  * @returns {RowRefs}
  */
 function buildRow(symbol) {
     const el = document.createElement('div');
     el.className = 'tape-row';
     el.dataset.ticker = symbol.ticker;
+    el.dataset.symbolId = String(symbol.id);
 
     const meta = document.createElement('div');
     meta.className = 'tape-row__meta';
@@ -109,6 +186,18 @@ function buildRow(symbol) {
     nameEl.textContent = symbol.name;
 
     meta.append(tickerEl, nameEl);
+
+    // Hover/focus-revealed only — an absolutely positioned overlay in the
+    // row's own right padding gutter, never a grid column, so watchlist.js's
+    // remove control cannot shift the price/change/pct/age columns off their
+    // shared decimal alignment. watchlist.js owns the click behaviour via
+    // delegation on #tape-rows; this module only owns the row's structure.
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'tape-row__remove';
+    removeBtn.dataset.action = 'remove-symbol';
+    removeBtn.setAttribute('aria-label', `Remove ${symbol.ticker} from the watchlist`);
+    removeBtn.textContent = '×';
 
     const numeric = document.createElement('div');
     numeric.className = 'tape-row__numeric';
@@ -134,7 +223,7 @@ function buildRow(symbol) {
     ageEl.className = 'tape-row__age';
 
     numeric.append(priceCell, changeEl, pctEl, ageEl);
-    el.append(meta, numeric);
+    el.append(meta, numeric, removeBtn);
 
     /** @type {RowRefs} */
     const refs = {
@@ -145,6 +234,7 @@ function buildRow(symbol) {
         changeEl,
         pctEl,
         ageEl,
+        id: symbol.id,
         decimals: symbol.price_decimals,
         prevPrice: null,
         quotedAt: null,

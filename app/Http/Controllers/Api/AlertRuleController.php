@@ -32,7 +32,14 @@ class AlertRuleController extends Controller
 
         $rule = $user->alertRules()->create($request->validated());
 
-        return (new AlertRuleResource($rule->load('symbol')))
+        // fresh(), not load(): is_active and cooldown_seconds are rarely in
+        // the request body, so create() leaves them null in memory even
+        // though the migration defaults them (true / 60) at the database
+        // level — Eloquent's insert does not read column defaults back onto
+        // the model. A full re-fetch is what update() below already does;
+        // store() needs the same round trip so the response the frontend
+        // renders the new rule's toggle from reflects the real stored value.
+        return (new AlertRuleResource($rule->fresh('symbol')))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }

@@ -3,5 +3,5 @@
 @use 'layout';
 @use 'tape';
 @use 'ops';
-
-// Later tasks add: alerts (alert rules + fired panel).
+@use 'forms';
+@use 'alerts';
