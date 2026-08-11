@@ -26,9 +26,12 @@ class Tick extends Model
      * part, and PostgresGrammar does not override it — so without this every
      * write truncates to whole seconds regardless of the column's declared
      * precision. On ticks that would destroy received_at - quoted_at, which is
-     * the ingest lag the ops panel reports.
+     * the ingest lag the ops panel reports. The trailing `P` appends an
+     * explicit UTC offset: these are timestamptz columns, so a naive string
+     * would be resolved using the session timezone instead of the instant it
+     * names.
      */
-    protected $dateFormat = 'Y-m-d H:i:s.u';
+    protected $dateFormat = 'Y-m-d H:i:s.uP';
 
     protected $fillable = [
         'symbol_id',

@@ -99,6 +99,11 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Belt-and-braces alongside the explicit UTC offsets the ingest
+            // path now writes: pins the session so a naive timestamp literal
+            // (from any query that isn't ours) resolves as UTC rather than
+            // whatever the OS/server's default timezone happens to be.
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [
@@ -147,7 +152,7 @@ return [
 
     'redis' => [
 
-        'client' => env('REDIS_CLIENT', 'phpredis'),
+        'client' => env('REDIS_CLIENT', 'predis'),
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
