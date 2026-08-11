@@ -52,3 +52,13 @@ it('defaults the simulated driver to off, so it never runs unasked', function ()
 
     expect((require base_path('config/tapehouse.php'))['simulator']['enabled'])->toBeFalse();
 });
+
+it('defaults the redis client to predis, which the token bucket requires', function (): void {
+    // CreditBudget's Lua call goes through command('eval', ...), which reaches
+    // the raw client. That argument shape is predis-only — under phpredis it
+    // hits a different native signature and throws.
+    putenv('REDIS_CLIENT');
+    unset($_ENV['REDIS_CLIENT'], $_SERVER['REDIS_CLIENT']);
+
+    expect((require base_path('config/database.php'))['redis']['client'])->toBe('predis');
+});

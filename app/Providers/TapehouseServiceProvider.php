@@ -7,8 +7,10 @@ namespace App\Providers;
 use App\Services\Budget\CreditBudget;
 use App\Services\Control\FeedControl;
 use App\Services\Metrics\FeedMetrics;
+use App\Services\Quotes\QuoteBroadcaster;
 use App\Services\Quotes\QuoteCache;
 use App\Services\Quotes\TickBuffer;
+use App\Services\Upstream\DriverStateReader;
 use App\Services\Upstream\TwelveDataClient;
 use GuzzleHttp\Client;
 use Illuminate\Contracts\Config\Repository as Config;
@@ -35,6 +37,8 @@ class TapehouseServiceProvider extends ServiceProvider
 
         $this->app->singleton(FeedMetrics::class, fn ($app): FeedMetrics => new FeedMetrics($this->redis($app)));
 
+        $this->app->singleton(DriverStateReader::class, fn ($app): DriverStateReader => new DriverStateReader($this->redis($app)));
+
         $this->app->singleton(TickBuffer::class, function ($app): TickBuffer {
             return new TickBuffer(
                 $app->make('db')->connection(),
@@ -48,6 +52,13 @@ class TapehouseServiceProvider extends ServiceProvider
                 new Client,
                 (string) $this->config($app)->get('tapehouse.api_key'),
                 (string) $this->config($app)->get('tapehouse.rest_url'),
+            );
+        });
+
+        $this->app->singleton(QuoteBroadcaster::class, function ($app): QuoteBroadcaster {
+            return new QuoteBroadcaster(
+                $app->make('events'),
+                (int) $this->config($app)->get('tapehouse.broadcast.coalesce_ms'),
             );
         });
     }

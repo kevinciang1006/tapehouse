@@ -416,7 +416,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   - `QuotesUpdated` — broadcasts as `quotes.updated` on `private-tape.{userId}`, payload `['quotes' => list<array>]`
   - `FeedStateChanged` — broadcasts as `feed.state` on `private-ops`
   - `QuoteBroadcaster::__construct(Dispatcher $events, int $coalesceMs)`, `add(Quote $q, int $userId): void`, `flushIfDue(): int`, `flush(): int`
-  - `DriverManager::__construct(..., ?QuoteBroadcaster $broadcaster = null)` — an optional final slot so Plan 2's `final` class gains the hook without a redesign
+  - `DriverManager::__construct(..., ?Dispatcher $events = null)` — an optional final slot so Plan 2's `final` class gains the hook without a redesign. It takes the event dispatcher, not the broadcaster: the manager dispatches `FeedStateChanged` itself, while `QuoteBroadcaster` is fed from `TapeIngest`'s quote callback.
+  - `TapeIngest::handle(..., QuoteBroadcaster $broadcaster, Dispatcher $events)` — both resolved by method injection
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -467,11 +468,10 @@ it('broadcasts once the window has elapsed', function (): void {
     Event::assertDispatched(QuotesUpdated::class);
 });
 
-it('coalesces many ticks into ONE event', function (): void {
+it('coalesces many ticks of one symbol into a single event', function (): void {
     $b = new QuoteBroadcaster(app('events'), 250);
 
-    // The whole point: a fast-moving symbol must not saturate the socket with
-    // one frame per tick.
+    // A fast-moving symbol must not saturate the socket with one frame per tick.
     for ($i = 0; $i < 50; $i++) {
         $b->add(broadcastQuote(price: (string) (228 + $i)), 1);
     }
@@ -480,6 +480,25 @@ it('coalesces many ticks into ONE event', function (): void {
     $b->flushIfDue();
 
     Event::assertDispatchedTimes(QuotesUpdated::class, 1);
+});
+
+it('batches several distinct tickers for one user into a single event', function (): void {
+    $b = new QuoteBroadcaster(app('events'), 250);
+
+    // This is the one that matters. The test above cannot fail: add() keys
+    // pending quotes by ticker, so fifty AAPL ticks collapse to one Quote
+    // before flush() runs, and the assertion holds even if flush() dispatched
+    // one frame per quote. Only distinct tickers prove the batching.
+    foreach (['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC/USD'] as $ticker) {
+        $b->add(broadcastQuote($ticker), 1);
+    }
+
+    $b->flush();
+
+    Event::assertDispatchedTimes(QuotesUpdated::class, 1);
+    Event::assertDispatched(QuotesUpdated::class, function (QuotesUpdated $e): bool {
+        return count($e->quotes) === 5;
+    });
 });
 
 it('keeps only the latest price per ticker in the window', function (): void {
@@ -872,7 +891,9 @@ it('filters by ticker or name, case-insensitively', function (): void {
 });
 
 it('honours the limit and caps it', function (): void {
-    Symbol::factory()->count(30)->create();
+    // Sixty, not thirty: the cap assertion below is vacuous unless more rows
+    // exist than the cap allows through.
+    Symbol::factory()->count(60)->create();
 
     actingAs(User::factory()->create());
 
@@ -1240,11 +1261,16 @@ use Illuminate\Http\Response;
 
 class WatchlistController extends Controller
 {
-    public function show(Request $request): WatchlistResource
+    public function show(Request $request): JsonResponse
     {
         $watchlist = $this->watchlistFor($request);
 
-        return new WatchlistResource($watchlist->load('symbols'));
+        // Explicit 200. firstOrCreate() marks a new row wasRecentlyCreated,
+        // and Laravel's ResourceResponse upgrades that to 201 — which on a GET
+        // misleads every client and cache in the chain.
+        return (new WatchlistResource($watchlist->load('symbols')))
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 
     public function store(StoreWatchlistSymbolRequest $request): JsonResponse

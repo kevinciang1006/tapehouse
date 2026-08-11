@@ -6,9 +6,11 @@ namespace App\Services\Upstream;
 
 use App\Enums\DriverState;
 use App\Enums\FeedEventLevel;
+use App\Events\FeedStateChanged;
 use App\Models\FeedEvent;
 use App\Services\Control\FeedControl;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Redis\Connections\Connection;
 
 final class DriverManager
@@ -44,6 +46,7 @@ final class DriverManager
         private readonly FeedControl $control,
         private readonly Connection $redis,
         private readonly array $promotionBackoff,
+        private readonly ?Dispatcher $events = null,
     ) {
         $this->current = $primary;
         $this->state = $primary->name();
@@ -215,5 +218,12 @@ final class DriverManager
             'reconnects' => (string) $this->reconnects,
             'last_error' => (string) ($this->current->lastError() ?? ''),
         ]);
+
+        $this->events?->dispatch(new FeedStateChanged(
+            $this->state,
+            (int) CarbonImmutable::now()->diffInSeconds($this->since, true),
+            $this->reconnects,
+            $this->current->lastError(),
+        ));
     }
 }

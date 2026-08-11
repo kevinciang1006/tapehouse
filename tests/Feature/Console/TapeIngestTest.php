@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Events\FeedStateChanged;
+use App\Events\QuotesUpdated;
 use App\Models\FeedEvent;
 use App\Models\Symbol;
 use App\Models\Tick;
@@ -9,6 +11,7 @@ use App\Models\User;
 use App\Models\Watchlist;
 use App\Services\Control\FeedControl;
 use App\Services\Quotes\QuoteCache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 
 use function Pest\Laravel\artisan;
@@ -17,6 +20,15 @@ beforeEach(function (): void {
     Redis::connection()->flushdb();
     config()->set('tapehouse.simulator.enabled', true);
     config()->set('tapehouse.simulator.interval_ms', 0);
+
+    // The driver manager and quote broadcaster now dispatch real
+    // ShouldBroadcast events on every transition/flush. Nothing here asserts
+    // on those events, and this suite has no Reverb server to receive them —
+    // without the fake, dispatch() reaches the Pusher-protocol broadcaster and
+    // every test fails on a real connection refused. Scoped rather than a
+    // blanket fake so a listener added later on this command's path fails
+    // loudly instead of being silently swallowed.
+    Event::fake([QuotesUpdated::class, FeedStateChanged::class]);
 });
 
 function seedWatchlist(int $count = 3): void
@@ -100,4 +112,34 @@ it('exits cleanly when the watchlist is empty', function (): void {
     artisan('tape:ingest', ['--once' => true])
         ->expectsOutputToContain('no symbols')
         ->assertSuccessful();
+});
+
+it('never broadcasts one operator\'s symbols to another', function (): void {
+    $alice = User::factory()->create();
+    $bob = User::factory()->create();
+    $aapl = Symbol::factory()->create(['ticker' => 'AAPL']);
+    $msft = Symbol::factory()->create(['ticker' => 'MSFT']);
+    Watchlist::factory()->for($alice)->create()->symbols()->sync([$aapl->id => ['position' => 0]]);
+    Watchlist::factory()->for($bob)->create()->symbols()->sync([$msft->id => ['position' => 0]]);
+
+    artisan('tape:ingest', ['--once' => true, '--passes' => 40])->assertSuccessful();
+
+    $ownTicker = [$alice->id => 'AAPL', $bob->id => 'MSFT'];
+
+    // Assert over EVERY dispatched event. A closure handed to
+    // assertDispatched only has to be satisfied by ONE event, so an
+    // existential check passes happily while a leaking frame sits beside it.
+    $events = Event::dispatched(QuotesUpdated::class)->map(
+        fn (array $args): QuotesUpdated => $args[0]
+    );
+
+    expect($events)->not->toBeEmpty();
+
+    foreach ($events as $event) {
+        expect($ownTicker)->toHaveKey($event->userId);
+
+        foreach ($event->quotes as $quote) {
+            expect($quote['ticker'])->toBe($ownTicker[$event->userId]);
+        }
+    }
 });
