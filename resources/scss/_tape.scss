@@ -1,0 +1,154 @@
+// The live tape — the product's signature element. A row is two lines: a
+// meta line (ticker + name) and a numeric line laid out in the design's
+// fixed four-column grid (price, change, change %, age). The price cell
+// splits into two further fixed-width spans (.price-int / .price-frac) so
+// the decimal point lands on the same x position whether the row is a
+// 2-decimal equity, a 5-decimal forex pair or a thousands-separated crypto
+// price — tabular-nums alone is not enough for that.
+//
+// The flash — a 12% up/down background wash on .tape-row__numeric that
+// decays to transparent over 600ms — is applied and removed by flash.js.
+// Nothing here animates position, scale or opacity on the row itself; that
+// is the whole point of the design.
+
+.tape-row {
+    height: var(--h-row);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 20px 0 18px;
+    border-bottom: 1px solid var(--rule);
+    // Reserved at 2px even at rest so the stale border does not shift the
+    // row's content the moment it appears.
+    border-left: 2px solid transparent;
+    cursor: default;
+}
+
+.tape-row:hover {
+    box-shadow: inset 1px 0 0 var(--signal);
+}
+
+// Staleness is structural, not chromatic: the border thickens and the age
+// value desaturates to muted. Nothing changes hue.
+.tape-row.is-stale {
+    border-left: 2px solid var(--muted);
+}
+
+.tape-row.is-stale .tape-row__age {
+    color: var(--muted);
+}
+
+.tape-row__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+}
+
+.tape-row__ticker {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.tape-row__name {
+    font-size: 11.5px;
+    color: var(--muted);
+}
+
+.tape-row__numeric {
+    display: grid;
+    grid-template-columns: 1fr 124px 84px 54px;
+    align-items: baseline;
+    margin: 0 -6px;
+    padding: 1px 6px;
+
+    background-color: rgba(var(--up-rgb), 0);
+    transition: background-color var(--flash-ms) var(--flash-ease);
+}
+
+// Applying the class with transition: none sets the wash instantly; flash.js
+// removes it one frame later and lets the transition above carry it back to
+// transparent over --flash-ms. A symbol ticking again mid-decay restarts
+// this from flash.js's WeakMap-keyed timer, not from here.
+.tape-row__numeric.is-flashing-up {
+    background-color: rgba(var(--up-rgb), var(--flash-alpha));
+    transition: none;
+}
+
+.tape-row__numeric.is-flashing-down {
+    background-color: rgba(var(--down-rgb), var(--flash-alpha));
+    transition: none;
+}
+
+.tape-row__price {
+    display: flex;
+    justify-content: flex-end;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.price-int {
+    width: 92px;
+    text-align: right;
+    color: var(--ink);
+}
+
+.price-frac {
+    width: 64px;
+    text-align: left;
+    color: var(--muted);
+}
+
+.tape-row__change,
+.tape-row__pct {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    // Neutral until a real value arrives (patched in by tape.js), which then
+    // adds is-up or is-down. up/down never appear anywhere but here and the
+    // flash wash.
+    color: var(--muted);
+}
+
+.tape-row__change.is-up,
+.tape-row__pct.is-up {
+    color: var(--up);
+}
+
+.tape-row__change.is-down,
+.tape-row__pct.is-down {
+    color: var(--down);
+}
+
+.tape-row__age {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+// prefers-reduced-motion replaces the decaying wash with a 1px up/down left
+// border that persists for --flash-ms and then disappears outright — no
+// fade, no shortened animation. flash.js's timing and class toggling stay
+// identical; only what the class paints changes here.
+@media (prefers-reduced-motion: reduce) {
+    .tape-row__numeric {
+        transition: none;
+    }
+
+    .tape-row__numeric.is-flashing-up {
+        background-color: transparent;
+        box-shadow: inset 1px 0 0 var(--up);
+    }
+
+    .tape-row__numeric.is-flashing-down {
+        background-color: transparent;
+        box-shadow: inset 1px 0 0 var(--down);
+    }
+}

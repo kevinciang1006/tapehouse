@@ -58,9 +58,7 @@
                 </div>
             </div>
             <div class="tape-body">
-                <table class="tape-table">
-                    <tbody id="tape-rows"></tbody>
-                </table>
+                <div id="tape-rows"></div>
             </div>
         </div>
 
