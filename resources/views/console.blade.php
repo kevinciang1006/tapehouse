@@ -143,11 +143,13 @@
                     </div>
                 </form>
                 <div id="alert-rules" class="alert-rules"></div>
+                <div id="alert-rules-empty" class="rules-empty" hidden>No rules yet. Create one to watch a threshold.</div>
                 <div class="panel-header">
                     <div class="label">Fired</div>
                 </div>
                 <div class="event-log-body">
                     <ul id="alert-fired-log"></ul>
+                    <div id="alert-fired-empty" class="rules-empty" hidden>Nothing has fired.</div>
                 </div>
             </div>
 

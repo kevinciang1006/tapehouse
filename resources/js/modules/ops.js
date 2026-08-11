@@ -145,12 +145,36 @@ function render(health) {
     setText(els.opsQueueDepth, String(health.queue_depth));
 
     renderStopButton(health.feed_stopped);
+    renderBanner(health.feed_stopped, health.credits.available === 0);
+}
 
-    const degraded = health.feed_stopped || health.credits.available === 0;
-
-    if (els.banner) {
-        els.banner.hidden = !degraded;
+/**
+ * One banner, but never one message for two different causes: an operator
+ * who clicked Stop feed and an exhausted credit budget are different
+ * situations and must read as different situations, or the console
+ * contradicts what is on screen (a full credit bar next to "budget spent").
+ *
+ * @param {boolean} feedStopped
+ * @param {boolean} creditsExhausted
+ */
+function renderBanner(feedStopped, creditsExhausted) {
+    if (!els?.banner) {
+        return;
     }
+
+    const degraded = feedStopped || creditsExhausted;
+    els.banner.hidden = !degraded;
+
+    if (!degraded) {
+        return;
+    }
+
+    setText(
+        els.banner,
+        feedStopped
+            ? 'Feed stopped by operator.'
+            : 'Credit budget spent. Polling rotates through symbols until the next refill.',
+    );
 }
 
 // Health poll failed: hold every value already on screen and only drop the
@@ -176,7 +200,7 @@ function renderCreditBars(available, capacity) {
         cell.className = 'credit-bar';
 
         if (i < available) {
-            cell.classList.add('is-spent');
+            cell.classList.add('is-filled');
         }
 
         els.creditBars.appendChild(cell);

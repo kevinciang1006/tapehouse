@@ -8,7 +8,17 @@
 // — not a dedicated alerts channel — so this module calls the memoized
 // tapeChannel() from echo.js rather than opening a second subscription,
 // which would double-handle every frame on that channel.
+//
+// jQuery: the rule form's bindings and the rule-toggle's click handling go
+// through jQuery here, same split as watchlist.js — low-frequency,
+// form-adjacent interactions where $.fn reads naturally, the toggle bound
+// once via $(document).on('click', '.rule-toggle', …) so every row created
+// by renderRule() (now or later) is covered without a per-row listener.
+// tape.js's per-quote cell patching stays vanilla DOM on purpose: it runs on
+// every tick for every row on screen, and wrapping that hot path in jQuery
+// would cost real work for no benefit.
 
+import $ from 'jquery';
 import { get, post, patch } from './api.js';
 import { tapeChannel } from './echo.js';
 import { formatTimestamp } from './ops-format.js';
@@ -62,7 +72,9 @@ export async function mount() {
         cancelBtn: document.getElementById('rule-form-cancel'),
         formError: document.getElementById('rule-form-error'),
         rulesList: document.getElementById('alert-rules'),
+        rulesEmpty: document.getElementById('alert-rules-empty'),
         firedLog: document.getElementById('alert-fired-log'),
+        firedEmpty: document.getElementById('alert-fired-empty'),
     };
 
     wireRail();
@@ -127,6 +139,16 @@ async function loadRules() {
     els.rulesList.textContent = '';
     rulesById.clear();
     response.data.forEach(renderRule);
+    syncRulesEmpty();
+}
+
+// Same idea as tape.js's syncListMeta(): shown in place of #alert-rules'
+// content, not alongside it, so no rules and a failed load can't be
+// mistaken for one another.
+function syncRulesEmpty() {
+    if (els?.rulesEmpty) {
+        els.rulesEmpty.hidden = rulesById.size > 0;
+    }
 }
 
 /**
@@ -169,8 +191,10 @@ function renderRule(rule) {
     const row = { el, toggle, ticker: rule.ticker, isActive: rule.is_active, toggleInFlight: false };
     rulesById.set(rule.id, row);
     paintToggle(row);
+    syncRulesEmpty();
 
-    toggle.addEventListener('click', () => onToggleClick(rule.id));
+    // No per-row listener: the click is caught by the delegated
+    // $(document).on('click', '.rule-toggle', …) bound once in wireForm().
 }
 
 /** @param {number} ruleId */
@@ -210,11 +234,28 @@ function paintToggle(row) {
 // --- Create-rule form ---------------------------------------------------
 
 function wireForm() {
-    els?.createBtn?.addEventListener('click', openForm);
-    els?.cancelBtn?.addEventListener('click', closeForm);
-    els?.form?.addEventListener('submit', onSubmit);
-    els?.symbolInput?.addEventListener('input', onSymbolInput);
-    els?.symbolResults?.addEventListener('click', onSymbolResultClick);
+    $(els?.createBtn).on('click', openForm);
+    $(els?.cancelBtn).on('click', closeForm);
+    $(els?.form).on('submit', onSubmit);
+    $(els?.symbolInput).on('input', onSymbolInput);
+    $(els?.symbolResults).on('click', '.symbol-search__result', onSymbolResultClick);
+
+    // Delegated from `document`, not `els.rulesList`: renderRule() can run
+    // any time after mount (a fresh rule created through this same form
+    // lands in the list immediately), so a listener bound once up front
+    // covers every row that exists now and every row that will exist,
+    // rather than renderRule() having to bind one per toggle it creates.
+    $(document).on('click', '.rule-toggle', onRuleToggleClick);
+}
+
+/** @param {JQuery.ClickEvent} event */
+function onRuleToggleClick(event) {
+    const row = /** @type {HTMLElement} */ (event.currentTarget).closest('.rule-row');
+    const ruleId = row instanceof HTMLElement ? Number(row.dataset.ruleId) : NaN;
+
+    if (Number.isFinite(ruleId)) {
+        onToggleClick(ruleId);
+    }
 }
 
 function openForm() {
@@ -296,33 +337,23 @@ function renderSymbolResults(symbols) {
         return;
     }
 
-    els.symbolResults.textContent = '';
+    const $results = $(els.symbolResults).empty();
 
     if (symbols.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'symbol-search__empty';
-        empty.textContent = 'no matches';
-        els.symbolResults.appendChild(empty);
+        $results.append($('<div>').addClass('symbol-search__empty').text('no matches'));
         return;
     }
 
     symbols.forEach((symbol) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'symbol-search__result';
-        btn.dataset.symbolId = String(symbol.id);
-        btn.dataset.ticker = symbol.ticker;
+        const $btn = $('<button>')
+            .attr('type', 'button')
+            .addClass('symbol-search__result')
+            .attr('data-symbol-id', String(symbol.id))
+            .attr('data-ticker', symbol.ticker)
+            .append($('<span>').addClass('symbol-search__result-ticker num').text(symbol.ticker))
+            .append($('<span>').addClass('symbol-search__result-name').text(symbol.name));
 
-        const ticker = document.createElement('span');
-        ticker.className = 'symbol-search__result-ticker num';
-        ticker.textContent = symbol.ticker;
-
-        const name = document.createElement('span');
-        name.className = 'symbol-search__result-name';
-        name.textContent = symbol.name;
-
-        btn.append(ticker, name);
-        els.symbolResults.appendChild(btn);
+        $results.append($btn);
     });
 }
 
@@ -415,6 +446,15 @@ async function loadFired() {
     firedRowCount = 0;
     // Already newest-first (AlertEventController orders by fired_at desc).
     response.data.forEach((event) => appendFired(event, { prepend: false }));
+    syncFiredEmpty();
+}
+
+// Same idea as syncRulesEmpty() above — a bare log and a failed fetch both
+// render as blank space otherwise.
+function syncFiredEmpty() {
+    if (els?.firedEmpty) {
+        els.firedEmpty.hidden = firedRowCount > 0;
+    }
 }
 
 /**
@@ -442,6 +482,7 @@ function appendFired(event, { prepend }) {
     }
 
     firedRowCount += 1;
+    syncFiredEmpty();
 
     // A live tail, capped at the same limit the initial load asked for —
     // otherwise a long session accumulates an unbounded log in the DOM.

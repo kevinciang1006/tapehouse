@@ -28,6 +28,27 @@ export function apply(el, direction) {
     void el.offsetWidth;
     el.classList.add(cls);
 
+    // Queried at call time, not module load, so an OS-level change mid-session
+    // is respected rather than baked in at import time.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reducedMotion) {
+        // _tape.scss swaps the decaying wash for a static 1px border under
+        // this media query — there is no transition to let play out, so the
+        // class has to be held on a timer instead of stripped next frame, or
+        // the substitute paints and vanishes within a single frame and the
+        // one operator this fallback exists for sees nothing at all.
+        pending.set(
+            el,
+            setTimeout(() => {
+                el.classList.remove(cls);
+                pending.delete(el);
+            }, 600),
+        );
+
+        return;
+    }
+
     // Two rAFs, not one: the class must be present for a full painted frame
     // (with transition: none) before it is removed, or the browser can
     // coalesce the add+remove into a single style recalc and never paint the

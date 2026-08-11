@@ -48,14 +48,13 @@ let ageTimer = null;
 export async function mount() {
     const watchlist = await get('/api/watchlist');
     const symbols = watchlist.data.symbols;
-    const tickers = symbols.map((symbol) => symbol.ticker);
 
     renderRows(symbols);
     syncListMeta();
 
     const [health] = await Promise.all([
         get('/api/ops/health'),
-        paintSnapshot(tickers, { doFlash: false }),
+        paintSnapshot(symbols.map((symbol) => symbol.ticker), { doFlash: false }),
     ]);
 
     // 0 is a real, meaningful value here (the "feed stopped" sentinel), so
@@ -72,8 +71,15 @@ export async function mount() {
     // A reconnecting client has a gap — whatever ticked while the socket was
     // down never arrived. Repaint from a fresh snapshot before resuming so
     // the tape does not silently keep showing pre-drop prices.
+    //
+    // Derived from rowsByTicker at call time, not the symbols list captured
+    // at mount: a symbol added mid-session via addSymbol() only ever lands
+    // in rowsByTicker, never in a `tickers` array from mount, so closing over
+    // the mount-time list would silently drop every symbol added since.
     onReconnect(() => {
-        paintSnapshot(tickers, { doFlash: false });
+        paintSnapshot([...rowsByTicker.keys()], { doFlash: false }).catch((error) => {
+            console.error('tape: reconnect repaint failed', error);
+        });
     });
 
     startAgeTicker();

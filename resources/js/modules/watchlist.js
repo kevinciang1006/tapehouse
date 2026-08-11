@@ -5,7 +5,15 @@
 // rowsByTicker map a new row must be wired into so it starts receiving
 // quote patches, and inserting/removing there stays a single-row operation,
 // never a repaint, so no other row's in-flight flash is interrupted.
+//
+// jQuery split: the debounced search input binding and the result-list's DOM
+// build/teardown go through jQuery here (and in alerts.js's rule form and
+// toggle delegation) — a handful of low-frequency, form-adjacent
+// interactions where $.fn reads naturally. tape.js's per-quote cell patching
+// stays vanilla DOM: it runs on every tick for every row on screen, and
+// wrapping that hot path in jQuery would cost real work for no benefit.
 
+import $ from 'jquery';
 import { get, post, del } from './api.js';
 import { addSymbol, removeSymbol } from './tape.js';
 
@@ -32,7 +40,7 @@ export async function mount() {
     };
 
     els.addBtn.addEventListener('click', openPanel);
-    els.input?.addEventListener('input', onSearchInput);
+    $(els.input).on('input', onSearchInput);
     els.results?.addEventListener('click', onResultClick);
     els.rows?.addEventListener('click', onRowClick);
     document.addEventListener('keydown', onKeydown);
@@ -132,32 +140,22 @@ function renderResults(symbols) {
         return;
     }
 
-    els.results.textContent = '';
+    const $results = $(els.results).empty();
 
     if (symbols.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'symbol-search__empty';
-        empty.textContent = 'no matches';
-        els.results.appendChild(empty);
+        $results.append($('<div>').addClass('symbol-search__empty').text('no matches'));
         return;
     }
 
     symbols.forEach((symbol) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'symbol-search__result';
-        btn.dataset.symbolId = String(symbol.id);
+        const $btn = $('<button>')
+            .attr('type', 'button')
+            .addClass('symbol-search__result')
+            .attr('data-symbol-id', String(symbol.id))
+            .append($('<span>').addClass('symbol-search__result-ticker num').text(symbol.ticker))
+            .append($('<span>').addClass('symbol-search__result-name').text(symbol.name));
 
-        const ticker = document.createElement('span');
-        ticker.className = 'symbol-search__result-ticker num';
-        ticker.textContent = symbol.ticker;
-
-        const name = document.createElement('span');
-        name.className = 'symbol-search__result-name';
-        name.textContent = symbol.name;
-
-        btn.append(ticker, name);
-        els.results.appendChild(btn);
+        $results.append($btn);
     });
 }
 

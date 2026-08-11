@@ -9,6 +9,20 @@
     flex: none;
 }
 
+// Same idiom as .tape-empty (_tape.scss): shown in place of the list's
+// content, not alongside it, so an empty rules panel or a quiet fired log
+// reads as "nothing here yet" rather than a failed load.
+.rules-empty {
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+.rules-empty[hidden] {
+    display: none;
+}
+
 .rule-row {
     padding: 10px 18px;
     border-bottom: 1px solid var(--rule);
