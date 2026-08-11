@@ -1,15 +1,48 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Tapehouse</title></head>
-<body>
-<form method="POST" action="/login">
-    @csrf
-    <label for="email">Email</label>
-    <input id="email" name="email" type="email" value="{{ old('email') }}" required>
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" required>
-    @error('email')<p role="alert">{{ $message }}</p>@enderror
-    <button type="submit">Sign in</button>
-</form>
-</body>
-</html>
+@extends('layouts.app')
+
+@section('title', 'Tapehouse — Sign in')
+
+@section('body')
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-card__wordmark">TAPEHOUSE</div>
+        <div class="label auth-card__subtitle">Operator sign in</div>
+
+        <form method="POST" action="{{ route('login') }}" class="auth-card__form">
+            @csrf
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value="{{ old('email') }}"
+                    class="form-input"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    class="form-input"
+                    required
+                >
+            </div>
+
+            @error('email')
+                <p role="alert" class="form-error">{{ $message }}</p>
+            @enderror
+
+            <button type="submit" class="btn btn--signal auth-card__submit">Sign in</button>
+        </form>
+
+        <div class="auth-card__footnote">Demo instance running on a Twelve Data trial key. Streaming falls back to polling when credits run out.</div>
+    </div>
+</div>
+@endsection

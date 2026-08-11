@@ -1,0 +1,121 @@
+// The alerts panel: the rule list, its toggle, and the fired-events log.
+//
+// Monochrome end to end, same as the ops panel and event log — `up`/`down`
+// are reserved for price deltas and the flash and never appear here, and
+// `signal` appears only on the toggle's on-state and the panel's buttons,
+// per the design's eight-colour palette.
+
+.alert-rules {
+    flex: none;
+}
+
+// Same idiom as .tape-empty (_tape.scss): shown in place of the list's
+// content, not alongside it, so an empty rules panel or a quiet fired log
+// reads as "nothing here yet" rather than a failed load.
+.rules-empty {
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+.rules-empty[hidden] {
+    display: none;
+}
+
+.rule-row {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rule-row:hover {
+    box-shadow: inset 1px 0 0 var(--signal);
+}
+
+.rule-row__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.rule-row__ticker {
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.rule-row__condition {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+// 34×18px, exactly as specified: `signal` fill + white knob when on, a
+// `rule`-bordered panel with a muted knob when off. The knob's "white" is
+// var(--panel) — the same white already in the eight-colour palette, not a
+// ninth colour.
+.rule-toggle {
+    width: 34px;
+    height: 18px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 2px;
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    cursor: pointer;
+}
+
+.rule-toggle.is-on {
+    justify-content: flex-end;
+    border-color: var(--signal);
+    background: var(--signal);
+}
+
+.rule-toggle__knob {
+    width: 12px;
+    height: 12px;
+    background: var(--muted);
+}
+
+.rule-toggle.is-on .rule-toggle__knob {
+    background: var(--panel);
+}
+
+// --- Fired-events log ---------------------------------------------------
+//
+// Same shape as .event-row (ops panel), with a ticker in place of the level
+// pill and a mono detail line in place of the free-text message.
+
+.fired-row {
+    padding: 9px 18px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.fired-row__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+}
+
+.fired-row__ts {
+    font-size: 11.5px;
+    color: var(--muted);
+}
+
+.fired-row__ticker {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.fired-row__detail {
+    font-size: 12px;
+    color: var(--ink);
+}

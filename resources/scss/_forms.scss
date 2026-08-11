@@ -1,0 +1,139 @@
+// Shared primitives for the two search-driven creation flows this task adds:
+// the tape panel's "Add symbol" search and the alerts panel's "Create rule"
+// form. `.form-group` / `.form-input` (the login screen's primitives) live in
+// _layout.scss already and are reused here; this file is the pieces those
+// two flows needed that had no home yet — the anchored search dropdown, the
+// rule form's layout, and its monochrome inline error.
+
+// --- Symbol search ----------------------------------------------------------
+//
+// `.symbol-search__panel` is the tape header's popover (anchored, floating
+// above the tape body). The alerts create-rule form reuses the result-list
+// classes below it inline, in normal flow, without the panel wrapper — a
+// popover would have nowhere sensible to float inside an already-open form.
+
+.symbol-search {
+    position: relative;
+}
+
+.symbol-search__panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 260px;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+}
+
+.symbol-search__panel[hidden] {
+    display: none;
+}
+
+.symbol-search__results {
+    max-height: 220px;
+    overflow: auto;
+}
+
+.symbol-search__results:empty {
+    display: none;
+}
+
+.symbol-search__result {
+    display: flex;
+    width: 100%;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 8px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.symbol-search__result:hover,
+.symbol-search__result:focus-visible {
+    background: var(--paper);
+}
+
+.symbol-search__result-ticker {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.symbol-search__result-name {
+    font-size: 11.5px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.symbol-search__empty {
+    padding: 7px 8px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+// --- Create-rule form ---------------------------------------------------
+
+.rule-form {
+    flex: none;
+    padding: 14px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.rule-form[hidden] {
+    display: none;
+}
+
+.rule-form__row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+// .form-input (_layout.scss, the login screen's primitive) is reused as-is
+// for every text/number/select control here; only the label needed its own
+// rule since .form-group's version is scoped to that wrapper class.
+.rule-form__row label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.rule-form__row--split {
+    flex-direction: row;
+    gap: 10px;
+}
+
+.rule-form__row--split > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rule-form__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+// Monochrome by design — this sits inside the alerts panel, which never uses
+// up/down (those are reserved for price deltas and the flash elsewhere).
+// Weight, not colour, is what marks it as an error.
+.field-error {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.field-error[hidden] {
+    display: none;
+}

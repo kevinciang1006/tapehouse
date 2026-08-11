@@ -58,6 +58,28 @@ it('creates an alert rule with valid data', function (): void {
     expect(AlertRule::where('user_id', $user->id)->count())->toBe(1);
 });
 
+it('reports the database defaults for is_active and cooldown_seconds when the request omits them', function (): void {
+    // create() never sends is_active back to the caller unless the response
+    // is re-fetched from the database: the migration defaults it to true at
+    // the database level, but Eloquent's insert does not read that default
+    // back onto the in-memory model. alerts.js renders the new rule's toggle
+    // straight from this response, so a regression here silently renders
+    // every freshly created rule as neither on nor off.
+    $user = User::factory()->create();
+    $symbol = Symbol::factory()->create();
+
+    actingAs($user);
+
+    postJson('/api/alert-rules', [
+        'symbol_id' => $symbol->id,
+        'metric' => 'price',
+        'condition' => 'above',
+        'threshold' => '250.00',
+    ])->assertCreated()
+        ->assertJsonPath('data.is_active', true)
+        ->assertJsonPath('data.cooldown_seconds', 60);
+});
+
 it('rejects an unknown metric', function (): void {
     $user = User::factory()->create();
     $symbol = Symbol::factory()->create();

@@ -1,0 +1,75 @@
+// Fonts are loaded from Google Fonts with `display=swap` as <link> tags in
+// the Blade layout <head> — never via @import here, which would serialise
+// the font request behind the stylesheet download.
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    background: none;
+    border: 0;
+}
+
+ul,
+ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+a {
+    color: var(--signal);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--ink);
+}
+
+// Section labels and the wordmark — the only uppercase, tracked text in the
+// system.
+.label {
+    font-family: var(--font-label);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+// Every numeral, ticker, timestamp and id renders through this class so
+// digits stay fixed-width and never reflow as they tick.
+.num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+}
