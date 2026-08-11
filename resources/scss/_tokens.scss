@@ -1,0 +1,29 @@
+:root {
+    --paper: #FBFBFD;
+    --panel: #FFFFFF;
+    --ink: #0B1220;
+    --muted: #6B7789;
+    --rule: #E4E8EF;
+    --signal: #1A56DB;
+    --up: #067A53;
+    --down: #C2334D;
+
+    // The flash wash, as components, so rgba() can vary only the alpha.
+    --up-rgb: 6, 122, 83;
+    --down-rgb: 194, 51, 77;
+
+    --font-label: 'Space Grotesk', sans-serif;
+    --font-body: Inter, sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --h-statusbar: 48px;
+    --h-banner: 34px;
+    --h-header: 44px;
+    --h-row: 52px;
+    --w-rail: 56px;
+    --w-panel: 320px;
+
+    --flash-ms: 600ms;
+    --flash-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --flash-alpha: 0.12;
+}

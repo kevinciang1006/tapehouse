@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\ConsoleController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -12,5 +13,8 @@ Route::middleware('guest')->group(function (): void {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
-// The console route arrives in a later plan, with ConsoleController and the
-// Blade shell. The framework health check stays registered in bootstrap/app.php.
+Route::middleware('auth')->group(function (): void {
+    Route::get('/', ConsoleController::class)->name('console');
+});
+
+// The framework health check stays registered in bootstrap/app.php.
