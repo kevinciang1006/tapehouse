@@ -10,6 +10,7 @@ use App\Services\Metrics\FeedMetrics;
 use App\Services\Quotes\QuoteBroadcaster;
 use App\Services\Quotes\QuoteCache;
 use App\Services\Quotes\TickBuffer;
+use App\Services\Upstream\DriverStateReader;
 use App\Services\Upstream\TwelveDataClient;
 use GuzzleHttp\Client;
 use Illuminate\Contracts\Config\Repository as Config;
@@ -35,6 +36,8 @@ class TapehouseServiceProvider extends ServiceProvider
         $this->app->singleton(QuoteCache::class, fn ($app): QuoteCache => new QuoteCache($this->redis($app)));
 
         $this->app->singleton(FeedMetrics::class, fn ($app): FeedMetrics => new FeedMetrics($this->redis($app)));
+
+        $this->app->singleton(DriverStateReader::class, fn ($app): DriverStateReader => new DriverStateReader($this->redis($app)));
 
         $this->app->singleton(TickBuffer::class, function ($app): TickBuffer {
             return new TickBuffer(
