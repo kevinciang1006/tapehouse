@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\AlertEventController;
+use App\Http\Controllers\Api\AlertRuleController;
 use App\Http\Controllers\Api\FeedEventController;
 use App\Http\Controllers\Api\OpsController;
 use App\Http\Controllers\Api\QuoteController;
@@ -21,4 +23,10 @@ Route::middleware(['auth:web', 'throttle:120,1'])->group(function (): void {
     Route::post('/ops/feed/stop', [OpsController::class, 'stop']);
     Route::post('/ops/feed/start', [OpsController::class, 'start']);
     Route::get('/feed-events', [FeedEventController::class, 'index']);
+
+    Route::get('/alert-rules', [AlertRuleController::class, 'index']);
+    Route::post('/alert-rules', [AlertRuleController::class, 'store']);
+    Route::patch('/alert-rules/{alertRule}', [AlertRuleController::class, 'update']);
+    Route::delete('/alert-rules/{alertRule}', [AlertRuleController::class, 'destroy']);
+    Route::get('/alert-events', [AlertEventController::class, 'index']);
 });

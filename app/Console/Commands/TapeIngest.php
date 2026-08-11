@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Jobs\EvaluateAlerts;
 use App\Models\Symbol;
 use App\Models\Watchlist;
 use App\Services\Budget\CreditBudget;
@@ -39,6 +40,16 @@ final class TapeIngest extends Command
 
     /** @var array<string, int> ticker => symbol id */
     private array $symbolIds = [];
+
+    /**
+     * Latest sample per symbol since the last dispatch, keyed by symbol id.
+     * Evaluation runs on the queue and is dispatched once per broadcast
+     * flush, never per tick — a slow rule must never be able to stall
+     * ingest.
+     *
+     * @var array<int, array{symbol_id: int, price: string, day_change_pct: string|null}>
+     */
+    private array $alertSamples = [];
 
     public function handle(
         Config $config,
@@ -88,7 +99,13 @@ final class TapeIngest extends Command
             // A quote for a ticker we do not track is not an error — the
             // upstream can echo symbols we unsubscribed from mid-flight.
             if (isset($this->symbolIds[$quote->ticker])) {
-                $buffer->add($quote, $this->symbolIds[$quote->ticker]);
+                $symbolId = $this->symbolIds[$quote->ticker];
+                $buffer->add($quote, $symbolId);
+                $this->alertSamples[$symbolId] = [
+                    'symbol_id' => $symbolId,
+                    'price' => $quote->price,
+                    'day_change_pct' => $quote->dayChangePct,
+                ];
             }
 
             if ($userId > 0) {
@@ -114,6 +131,7 @@ final class TapeIngest extends Command
             try {
                 $buffer->flush();
                 $broadcaster->flush();
+                $this->dispatchAlerts();
             } catch (Throwable $e) {
                 $this->error('flush on shutdown failed: '.$e->getMessage());
             }
@@ -132,6 +150,7 @@ final class TapeIngest extends Command
 
         $buffer->flushIfDue();
         $broadcaster->flushIfDue();
+        $this->dispatchAlerts();
     }
 
     private function runLoop(DriverManager $manager, TickBuffer $buffer, QuoteBroadcaster $broadcaster): void
@@ -141,21 +160,40 @@ final class TapeIngest extends Command
             $manager->current()->tick();
         });
 
-        Loop::addPeriodicTimer(1.0, static function () use ($buffer, $broadcaster): void {
+        Loop::addPeriodicTimer(1.0, function () use ($buffer, $broadcaster): void {
             $buffer->flushIfDue();
             $broadcaster->flushIfDue();
+            $this->dispatchAlerts();
         });
 
         foreach ([SIGTERM, SIGINT] as $signal) {
-            Loop::addSignal($signal, static function () use ($buffer, $broadcaster, $manager): void {
+            Loop::addSignal($signal, function () use ($buffer, $broadcaster, $manager): void {
                 $buffer->flush();
                 $broadcaster->flush();
+                $this->dispatchAlerts();
                 $manager->stopAll();
                 Loop::stop();
             });
         }
 
         Loop::run();
+    }
+
+    /**
+     * Dispatches whatever quote samples have accumulated since the last
+     * flush, tied to the same call sites as the broadcaster's own flush so
+     * evaluation runs on the same coalesced cadence as quote broadcasts —
+     * batched onto the queue and never inline on the ingest path. A slow
+     * rule must never be able to stall ingest.
+     */
+    private function dispatchAlerts(): void
+    {
+        if ($this->alertSamples === []) {
+            return;
+        }
+
+        EvaluateAlerts::dispatch(array_values($this->alertSamples));
+        $this->alertSamples = [];
     }
 
     /**
