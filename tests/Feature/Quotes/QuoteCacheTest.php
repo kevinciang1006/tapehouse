@@ -56,3 +56,16 @@ it('sets a ttl so a dead feed does not serve stale prices forever', function ():
 
     expect(Redis::connection()->ttl('tape:quote:AAPL'))->toBeGreaterThan(0);
 });
+
+it('returns null instead of crashing on a partially-written hash', function (): void {
+    // A hash missing a field it needs to hydrate a Quote — e.g. a write that
+    // was interrupted mid-hmset — must not surface as an undefined-key
+    // warning followed by a TypeError on the quote read path.
+    Redis::connection()->hmset('tape:quote:PARTIAL', [
+        'ticker' => 'PARTIAL',
+        'price' => '10.00',
+        // source, quoted_at, received_at deliberately missing.
+    ]);
+
+    expect((new QuoteCache(Redis::connection()))->get('PARTIAL'))->toBeNull();
+});

@@ -26,8 +26,12 @@ it('exposes every key the ingest subsystem depends on', function (string $key): 
     'simulator.interval_ms',
 ]);
 
-it('defaults the credit budget to the twelve data trial allowance', function (): void {
-    expect(config('tapehouse.budget.capacity'))->toBe(8)
+it('defaults the credit budget to half the twelve data trial allowance, so the burst cannot double it', function (): void {
+    // Capacity == refill would let a full bucket grant capacity + refill (16)
+    // inside a single rolling minute against an 8-credit allowance. Capacity
+    // must stay strictly below refill so the worst case is bounded closer to
+    // it, while refill_per_minute keeps steady-state throughput at 8/min.
+    expect(config('tapehouse.budget.capacity'))->toBe(4)
         ->and(config('tapehouse.budget.refill_per_minute'))->toBe(8);
 });
 

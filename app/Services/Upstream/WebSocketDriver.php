@@ -30,6 +30,13 @@ final class WebSocketDriver implements UpstreamDriver
 
     private ?CarbonImmutable $lastMessageAt = null;
 
+    /**
+     * Distinct from $lastMessageAt on purpose: a heartbeat or other non-price
+     * frame proves the socket is alive but not that the feed is — a stream of
+     * nothing but heartbeats must still read as silence.
+     */
+    private ?CarbonImmutable $lastQuoteAt = null;
+
     public function __construct(
         private readonly Connector $connector,
         private readonly string $wsUrl,
@@ -45,12 +52,13 @@ final class WebSocketDriver implements UpstreamDriver
 
     public function start(array $tickers, callable $onQuote): void
     {
-        $this->tickers = $tickers;
+        $this->tickers = array_values($tickers);
         $this->onQuote = $onQuote;
         $this->authRejected = false;
         $this->consecutiveFailures = 0;
         $this->lastError = null;
         $this->lastMessageAt = CarbonImmutable::now();
+        $this->lastQuoteAt = CarbonImmutable::now();
 
         $this->connect();
     }
@@ -58,14 +66,18 @@ final class WebSocketDriver implements UpstreamDriver
     /**
      * No I/O. The socket is driven by the ReactPHP loop; this only asks
      * whether the connection still looks alive.
+     *
+     * Driven off $lastQuoteAt, not $lastMessageAt: a socket that only ever
+     * delivers heartbeats or other non-price frames would otherwise report
+     * healthy forever while zero quotes reach the callback.
      */
     public function tick(): void
     {
-        if ($this->lastMessageAt === null || $this->authRejected) {
+        if ($this->lastQuoteAt === null || $this->authRejected) {
             return;
         }
 
-        $silentFor = CarbonImmutable::now()->diffInSeconds($this->lastMessageAt, true);
+        $silentFor = CarbonImmutable::now()->diffInSeconds($this->lastQuoteAt, true);
 
         if ($silentFor > $this->silenceSeconds) {
             $this->lastError = sprintf('socket silent for %ds', (int) $silentFor);
@@ -79,6 +91,14 @@ final class WebSocketDriver implements UpstreamDriver
         $this->socket = null;
         $this->tickers = [];
         $this->onQuote = null;
+
+        // Clear transient failures so the manager's promotion backoff can
+        // actually retry us — isHealthy() gates promote(), and without this
+        // the counter stays pinned at the threshold forever and the whole
+        // backoff schedule is unreachable. authRejected stays sticky on
+        // purpose: a rejected key will not fix itself inside one process, and
+        // retrying would burn the trial's limited websocket credits.
+        $this->consecutiveFailures = 0;
     }
 
     public function isHealthy(): bool
@@ -94,6 +114,17 @@ final class WebSocketDriver implements UpstreamDriver
     public function consecutiveFailures(): int
     {
         return $this->consecutiveFailures;
+    }
+
+    /**
+     * Exposed for observability: distinct from the feed-liveness signal that
+     * gates health, this tells the ops panel whether the socket itself is
+     * still delivering frames of any kind — including heartbeats — even
+     * while the feed silence check below reports the driver unhealthy.
+     */
+    public function lastMessageAt(): ?CarbonImmutable
+    {
+        return $this->lastMessageAt;
     }
 
     public function subscribePayload(): string
@@ -136,6 +167,7 @@ final class WebSocketDriver implements UpstreamDriver
         $this->consecutiveFailures = 0;
 
         $receivedAt = CarbonImmutable::now();
+        $this->lastQuoteAt = $receivedAt;
 
         ($this->onQuote)(new Quote(
             ticker: (string) $payload['symbol'],

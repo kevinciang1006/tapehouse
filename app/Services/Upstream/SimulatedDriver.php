@@ -46,7 +46,7 @@ final class SimulatedDriver implements UpstreamDriver
 
     public function start(array $tickers, callable $onQuote): void
     {
-        $this->tickers = $tickers;
+        $this->tickers = array_values($tickers);
         $this->onQuote = $onQuote;
         $this->lastTickAt = null;
 

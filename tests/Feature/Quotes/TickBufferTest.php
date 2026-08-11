@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 function bufferedQuote(string $price = '228.41'): Quote
 {
-    $at = CarbonImmutable::parse('2026-08-10 12:00:00.123456');
+    $at = CarbonImmutable::now()->setMicrosecond(123456);
 
     return new Quote('AAPL', $price, '1.82', '0.80', TickSource::Polling, $at, $at->addMilliseconds(40));
 }
@@ -108,4 +108,21 @@ it('is safe to flush when empty', function (): void {
 
     expect($buffer->flush())->toBe(0)
         ->and(Tick::count())->toBe(0);
+});
+
+it('stores timestamps at the correct absolute instant, not shifted by the session timezone', function (): void {
+    $symbol = Symbol::factory()->create();
+    $buffer = new TickBuffer(DB::connection(), 1, 1000);
+
+    $buffer->add(bufferedQuote(), $symbol->id);
+
+    // Ask Postgres itself how old the row is. A naive timestamp string written
+    // into a timestamptz column is resolved using the session timezone, so an
+    // unpinned session silently shifts every tick by the UTC offset. Comparing
+    // against PHP's clock would not catch it — both sides shift together.
+    $ageSeconds = (float) DB::selectOne(
+        'SELECT EXTRACT(EPOCH FROM (now() - quoted_at)) AS age FROM ticks ORDER BY id DESC LIMIT 1'
+    )->age;
+
+    expect(abs($ageSeconds))->toBeLessThan(60.0);
 });

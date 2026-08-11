@@ -134,3 +134,49 @@ it('builds a subscribe payload for its ticker list', function (): void {
         'params' => ['symbols' => 'AAPL,EUR/USD'],
     ]));
 });
+
+it('becomes promotable again after a transient demotion', function (): void {
+    $driver = wsDriver();
+    $driver->start(['AAPL'], fn (Quote $q) => null);
+    $driver->handleFailure('reset');
+    $driver->handleFailure('reset');
+    $driver->handleFailure('reset');
+    expect($driver->isHealthy())->toBeFalse();
+
+    // What DriverManager::demote() does to the primary.
+    $driver->stop();
+
+    // promote() is gated on isHealthy(); without this the backoff is dead code.
+    expect($driver->isHealthy())->toBeTrue();
+});
+
+it('stays unpromotable after an auth rejection, even once stopped', function (): void {
+    $driver = wsDriver();
+    $driver->start(['AAPL'], fn (Quote $q) => null);
+    $driver->handleMessage(json_encode([
+        'event' => 'subscribe-status', 'status' => 'error',
+        'messages' => ['**api_key** not valid or Pro plan required'],
+    ]));
+
+    $driver->stop();
+
+    // A rejected key will not fix itself; retrying burns trial credits.
+    expect($driver->isHealthy())->toBeFalse();
+});
+
+it('goes unhealthy when only heartbeats arrive and no quotes do', function (): void {
+    $driver = wsDriver(silence: 90);
+    $driver->start(['AAPL'], fn (Quote $q) => null);
+
+    // A live socket delivering no prices is a dead feed wearing a green light.
+    for ($i = 0; $i < 10; $i++) {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-10 12:00:00')->addSeconds($i * 10));
+        $driver->handleMessage(json_encode(['event' => 'heartbeat']));
+        $driver->tick();
+    }
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-10 12:01:31'));
+    $driver->tick();
+
+    expect($driver->isHealthy())->toBeFalse();
+});

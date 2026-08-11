@@ -46,6 +46,9 @@ it('builds the tick row shape the buffer inserts', function (): void {
         ->and($row['price'])->toBe('228.41')
         ->and($row['day_change'])->toBe('1.82')
         ->and($row['source'])->toBe('websocket')
-        ->and($row['quoted_at'])->toBe('2026-08-10 12:00:00.000000')
-        ->and($row['received_at'])->toBe('2026-08-10 12:00:00.040000');
+        // Explicit UTC offset on purpose: quoted_at/received_at land in a
+        // timestamptz column, and a naive string here would be resolved
+        // against the session timezone instead of the instant it names.
+        ->and($row['quoted_at'])->toBe('2026-08-10 12:00:00.000000+00:00')
+        ->and($row['received_at'])->toBe('2026-08-10 12:00:00.040000+00:00');
 });

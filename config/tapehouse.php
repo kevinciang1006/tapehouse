@@ -15,9 +15,17 @@ return [
     /*
      | Redis token bucket. Twelve Data charges one credit per symbol, not per
      | request, so a batch of eight symbols costs eight tokens.
+     |
+     | Capacity is deliberately HALF the refill rate. A token bucket's worst
+     | case inside any rolling 60s window is capacity + refill — with both at
+     | 8 that is 16 against an 8-credit allowance. Halving the burst does not
+     | eliminate the overshoot (a bucket cannot enforce a fixed-window limit),
+     | but it bounds it far closer while keeping steady-state throughput at the
+     | full 8 per minute. A 429 from upstream is survivable: PollingDriver
+     | treats transient HTTP failures as non-fatal and keeps its health.
      */
     'budget' => [
-        'capacity' => (int) env('TAPEHOUSE_BUDGET_CAPACITY', 8),
+        'capacity' => (int) env('TAPEHOUSE_BUDGET_CAPACITY', 4),
         'refill_per_minute' => (int) env('TAPEHOUSE_BUDGET_REFILL_PER_MINUTE', 8),
     ],
 

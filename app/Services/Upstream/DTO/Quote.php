@@ -49,9 +49,12 @@ final readonly class Quote
             // Pre-formatted with microseconds on purpose. Laravel's query
             // grammar formats DateTimeInterface bindings as 'Y-m-d H:i:s' with
             // no fractional part, so passing Carbon here would silently
-            // truncate and destroy the lag this row exists to record.
-            'quoted_at' => $this->quotedAt->format('Y-m-d H:i:s.u'),
-            'received_at' => $this->receivedAt->format('Y-m-d H:i:s.u'),
+            // truncate and destroy the lag this row exists to record. The
+            // trailing `P` appends an explicit UTC offset: quoted_at is a
+            // timestamptz column, so a naive string here would be resolved
+            // using the session timezone instead of the instant it names.
+            'quoted_at' => $this->quotedAt->format('Y-m-d H:i:s.uP'),
+            'received_at' => $this->receivedAt->format('Y-m-d H:i:s.uP'),
         ];
     }
 }

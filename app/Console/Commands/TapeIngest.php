@@ -23,6 +23,7 @@ use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
 use Ratchet\Client\Connector;
 use React\EventLoop\Loop;
+use Throwable;
 
 final class TapeIngest extends Command
 {
@@ -95,8 +96,14 @@ final class TapeIngest extends Command
             }
         } finally {
             // Without this every buffered tick below the flush threshold is
-            // lost on shutdown.
-            $buffer->flush();
+            // lost on shutdown. Wrapped so a failure here (e.g. Postgres is
+            // down) does not replace whatever exception sent us into this
+            // finally block in the first place.
+            try {
+                $buffer->flush();
+            } catch (Throwable $e) {
+                $this->error('flush on shutdown failed: '.$e->getMessage());
+            }
             $manager->stopAll();
         }
 

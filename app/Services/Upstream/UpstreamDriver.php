@@ -12,7 +12,11 @@ interface UpstreamDriver
     public function name(): DriverState;
 
     /**
-     * @param  list<string>  $tickers
+     * Not asserted as a list: callers may hand in a non-sequential array, so
+     * implementations normalise with array_values() at this boundary rather
+     * than trust the caller.
+     *
+     * @param  array<int, string>  $tickers
      * @param  callable(Quote): void  $onQuote
      */
     public function start(array $tickers, callable $onQuote): void;

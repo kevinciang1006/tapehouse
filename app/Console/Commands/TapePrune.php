@@ -21,7 +21,7 @@ final class TapePrune extends Command
         $cutoff = CarbonImmutable::now()->subHours($hours);
 
         $deleted = $db->table('ticks')
-            ->where('quoted_at', '<', $cutoff->format('Y-m-d H:i:s.u'))
+            ->where('quoted_at', '<', $cutoff->format('Y-m-d H:i:s.uP'))
             ->delete();
 
         $this->info(sprintf('pruned %d ticks older than %dh', $deleted, $hours));

@@ -44,7 +44,25 @@ final readonly class QuoteCache
         /** @var array<string, string> $hash */
         $hash = $this->redis->hgetall($this->key($ticker));
 
-        return $hash === [] ? null : $this->hydrate($hash);
+        if ($hash === [] || $this->missingRequiredFields($hash)) {
+            return null;
+        }
+
+        return $this->hydrate($hash);
+    }
+
+    /**
+     * @param  array<string, string>  $hash
+     */
+    private function missingRequiredFields(array $hash): bool
+    {
+        foreach (['ticker', 'price', 'source', 'quoted_at', 'received_at'] as $field) {
+            if (! array_key_exists($field, $hash)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

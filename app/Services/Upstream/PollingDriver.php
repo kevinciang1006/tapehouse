@@ -43,7 +43,7 @@ final class PollingDriver implements UpstreamDriver
 
     public function start(array $tickers, callable $onQuote): void
     {
-        $this->tickers = $tickers;
+        $this->tickers = array_values($tickers);
         $this->onQuote = $onQuote;
         $this->authRejected = false;
         $this->lastError = null;

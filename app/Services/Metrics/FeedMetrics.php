@@ -49,9 +49,23 @@ final readonly class FeedMetrics
         ];
     }
 
+    /**
+     * A rolling estimate rather than a read of the current wall-clock minute
+     * bucket alone: reading only that key reports ~12 at second 3 of the
+     * minute and ~240 at second 59, then drops to 0 the instant the minute
+     * rolls over — a sawtooth the ops panel would read as a repeated outage.
+     * Blends in the previous minute's count, weighted by how much of the
+     * trailing 60s window still falls inside it.
+     */
     public function ticksPerMinute(): int
     {
-        return (int) ($this->redis->get($this->minuteKey()) ?? 0);
+        $now = CarbonImmutable::now();
+        $secondOfMinute = (int) $now->format('s');
+
+        $current = (int) ($this->redis->get($this->minuteKeyFor($now)) ?? 0);
+        $previous = (int) ($this->redis->get($this->minuteKeyFor($now->subMinute())) ?? 0);
+
+        return $current + (int) round($previous * ((60 - $secondOfMinute) / 60));
     }
 
     /**
@@ -80,6 +94,11 @@ final readonly class FeedMetrics
 
     private function minuteKey(): string
     {
-        return 'tape:metrics:ticks_minute:'.CarbonImmutable::now()->format('YmdHi');
+        return $this->minuteKeyFor(CarbonImmutable::now());
+    }
+
+    private function minuteKeyFor(CarbonImmutable $at): string
+    {
+        return 'tape:metrics:ticks_minute:'.$at->format('YmdHi');
     }
 }
