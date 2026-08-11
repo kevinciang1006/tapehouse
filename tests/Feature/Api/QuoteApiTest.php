@@ -48,6 +48,24 @@ it('returns an empty set when asked for nothing', function (): void {
     getJson('/api/quotes?symbols=')->assertOk()->assertJsonCount(0, 'data');
 });
 
+it('caps the ticker list', function (): void {
+    $tickers = [];
+
+    for ($i = 0; $i < 55; $i++) {
+        $ticker = 'T'.$i;
+        $tickers[] = $ticker;
+        cacheAQuote($ticker, '1.00');
+    }
+
+    actingAs(User::factory()->create());
+
+    // The hottest endpoint in the app, hit on every reconnect — an unbounded
+    // ticker list would be an unbounded cache read on every request.
+    getJson('/api/quotes?symbols='.implode(',', $tickers))
+        ->assertOk()
+        ->assertJsonCount(50, 'data');
+});
+
 it('reads Redis and never queries Postgres', function (): void {
     cacheAQuote('AAPL', '228.41');
     actingAs(User::factory()->create());

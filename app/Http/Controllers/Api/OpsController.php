@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DriverState;
 use App\Enums\FeedEventLevel;
 use App\Http\Controllers\Controller;
 use App\Models\FeedEvent;
@@ -22,6 +23,7 @@ class OpsController extends Controller
         DriverStateReader $state,
         CreditBudget $budget,
         FeedMetrics $metrics,
+        FeedControl $control,
     ): JsonResponse {
         $driver = $state->read();
         $lag = $metrics->lagPercentiles();
@@ -41,6 +43,18 @@ class OpsController extends Controller
             'lag' => ['p50' => $lag['p50'], 'p95' => $lag['p95']],
             'ticks_per_minute' => $metrics->ticksPerMinute(),
             'queue_depth' => Queue::size(),
+            // Driver-relative: a polling feed on a trial key legitimately
+            // refreshes slower than a streaming one, so the frontend must not
+            // hardcode this. Stopped has no meaningful threshold — its raw
+            // value is PHP_INT_MAX, which would serialise as a huge, useless
+            // number rather than a sentinel the UI can special-case.
+            'stale_seconds' => $driver['driver'] === DriverState::Stopped
+                ? 0
+                : $driver['driver']->staleThreshold(),
+            // `driver: 'stopped'` alone cannot distinguish an operator having
+            // pressed Stop from ingest never having started at all, so the
+            // status-bar button cannot choose its label without this.
+            'feed_stopped' => $control->isStopped(),
         ]]);
     }
 

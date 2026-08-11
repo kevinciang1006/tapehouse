@@ -113,3 +113,19 @@ it('exits cleanly when the watchlist is empty', function (): void {
         ->expectsOutputToContain('no symbols')
         ->assertSuccessful();
 });
+
+it('never broadcasts one operator\'s symbols to another', function (): void {
+    $alice = User::factory()->create();
+    $bob = User::factory()->create();
+    $aapl = Symbol::factory()->create(['ticker' => 'AAPL']);
+    $msft = Symbol::factory()->create(['ticker' => 'MSFT']);
+    Watchlist::factory()->for($alice)->create()->symbols()->sync([$aapl->id => ['position' => 0]]);
+    Watchlist::factory()->for($bob)->create()->symbols()->sync([$msft->id => ['position' => 0]]);
+
+    artisan('tape:ingest', ['--once' => true, '--passes' => 40])->assertSuccessful();
+
+    Event::assertDispatched(QuotesUpdated::class, function (QuotesUpdated $e) use ($alice): bool {
+        return $e->userId !== $alice->id
+            || collect($e->quotes)->pluck('ticker')->every(fn (string $t): bool => $t === 'AAPL');
+    });
+});

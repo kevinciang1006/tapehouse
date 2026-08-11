@@ -31,7 +31,9 @@ it('reports health even before the ingest loop has ever run', function (): void 
     getJson('/api/ops/health')
         ->assertOk()
         ->assertJsonPath('data.driver', 'stopped')
-        ->assertJsonStructure(['data' => ['driver', 'seconds_in_state', 'reconnects', 'last_error', 'credits', 'lag', 'ticks_per_minute', 'queue_depth']]);
+        ->assertJsonPath('data.stale_seconds', 0)
+        ->assertJsonPath('data.feed_stopped', false)
+        ->assertJsonStructure(['data' => ['driver', 'seconds_in_state', 'reconnects', 'last_error', 'credits', 'lag', 'ticks_per_minute', 'queue_depth', 'stale_seconds', 'feed_stopped']]);
 });
 
 it('reports the driver state the ingest process published', function (): void {
@@ -46,7 +48,17 @@ it('reports the driver state the ingest process published', function (): void {
         ->assertOk()
         ->assertJsonPath('data.driver', 'polling')
         ->assertJsonPath('data.reconnects', 3)
-        ->assertJsonPath('data.last_error', 'ws demoted');
+        ->assertJsonPath('data.last_error', 'ws demoted')
+        ->assertJsonPath('data.stale_seconds', config('tapehouse.stale.polling'));
+});
+
+it('reports feed_stopped true once an operator has pressed stop', function (): void {
+    actingAs(User::factory()->create());
+    app(FeedControl::class)->stop();
+
+    getJson('/api/ops/health')
+        ->assertOk()
+        ->assertJsonPath('data.feed_stopped', true);
 });
 
 it('reports the credit budget as spent versus capacity', function (): void {

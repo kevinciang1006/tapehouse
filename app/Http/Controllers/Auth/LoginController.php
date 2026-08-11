@@ -21,7 +21,7 @@ class LoginController extends Controller
 
     public function store(LoginRequest $request): RedirectResponse
     {
-        if (! Auth::attempt($request->only('email', 'password'), true)) {
+        if (! Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
             // Attach to `email` rather than naming the failing field: telling a
             // caller which half was wrong turns the login form into an account
             // enumeration oracle.

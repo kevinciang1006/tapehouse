@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Enums\DriverState;
+use App\Events\FeedStateChanged;
 use App\Models\FeedEvent;
 use App\Services\Control\FeedControl;
 use App\Services\Upstream\DriverManager;
 use App\Services\Upstream\DTO\Quote;
 use App\Services\Upstream\UpstreamDriver;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -227,6 +229,30 @@ it('resumes on the primary when the control flag clears', function (): void {
     $m->supervise();
 
     expect($m->state())->toBe(DriverState::WebSocket);
+});
+
+it('dispatches a FeedStateChanged event on a demotion when a dispatcher is wired in', function (): void {
+    Event::fake([FeedStateChanged::class]);
+
+    $primary = fakeDriver(DriverState::WebSocket);
+    $fallback = fakeDriver(DriverState::Polling);
+    $m = new DriverManager(
+        $primary,
+        $fallback,
+        new FeedControl(Redis::connection()),
+        Redis::connection(),
+        [60, 120, 300],
+        app('events'),
+    );
+    $m->boot(['AAPL'], fn (Quote $q) => null);
+
+    $primary->healthy = false;
+    $m->supervise();
+
+    Event::assertDispatched(
+        FeedStateChanged::class,
+        fn (FeedStateChanged $e): bool => $e->driver === DriverState::Polling,
+    );
 });
 
 it('publishes its state to redis for the ops panel', function (): void {

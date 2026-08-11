@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\AlertEvent;
 use App\Models\AlertRule;
 use App\Models\Symbol;
 use App\Models\User;
@@ -157,4 +158,15 @@ it('forbids deleting another operator\'s alert rule', function (): void {
     deleteJson('/api/alert-rules/'.$rule->id)->assertForbidden();
 
     expect(AlertRule::find($rule->id))->not->toBeNull();
+});
+
+it('lists only the signed-in operator\'s fired events', function (): void {
+    $user = User::factory()->create();
+    $other = User::factory()->create();
+    AlertEvent::factory()->for(AlertRule::factory()->for($user), 'rule')->create();
+    AlertEvent::factory()->for(AlertRule::factory()->for($other), 'rule')->create();
+
+    actingAs($user);
+
+    getJson('/api/alert-events')->assertOk()->assertJsonCount(1, 'data');
 });

@@ -6,7 +6,6 @@ namespace App\Console\Commands;
 
 use App\Jobs\EvaluateAlerts;
 use App\Models\Symbol;
-use App\Models\Watchlist;
 use App\Services\Budget\CreditBudget;
 use App\Services\Control\FeedControl;
 use App\Services\Metrics\FeedMetrics;
@@ -71,7 +70,13 @@ final class TapeIngest extends Command
             return self::SUCCESS;
         }
 
-        $userId = (int) (Watchlist::query()->value('user_id') ?? 0);
+        /** @var array<string, list<int>> $watchers */
+        $watchers = Symbol::query()
+            ->whereHas('watchlists')
+            ->with('watchlists:id,user_id')
+            ->get()
+            ->mapWithKeys(fn (Symbol $s): array => [$s->ticker => $s->watchlists->pluck('user_id')->all()])
+            ->all();
 
         $primary = $this->buildPrimary($config, $client, $budget, $redis, $tickers);
         $fallback = new PollingDriver(
@@ -91,7 +96,7 @@ final class TapeIngest extends Command
             $events,
         );
 
-        $onQuote = function (Quote $quote) use ($cache, $buffer, $metrics, $broadcaster, $userId): void {
+        $onQuote = function (Quote $quote) use ($cache, $buffer, $metrics, $broadcaster, $watchers): void {
             $cache->put($quote);
             $metrics->recordLag($quote->lagMs());
             $metrics->recordTick();
@@ -108,8 +113,12 @@ final class TapeIngest extends Command
                 ];
             }
 
-            if ($userId > 0) {
-                $broadcaster->add($quote, $userId);
+            // Fan out per watcher. One operator must never receive a symbol
+            // they did not add — the tape channel is private per user, and
+            // inferring a single recipient both leaked across tenants and left
+            // every other operator's tape permanently dead.
+            foreach ($watchers[$quote->ticker] ?? [] as $watcherId) {
+                $broadcaster->add($quote, $watcherId);
             }
         };
 

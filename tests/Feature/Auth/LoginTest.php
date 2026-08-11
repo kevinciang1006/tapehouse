@@ -37,3 +37,18 @@ it('logs an operator out', function (): void {
 
     expect(auth()->check())->toBeFalse();
 });
+
+it('throttles rapid login attempts', function (): void {
+    $user = User::factory()->create(['password' => bcrypt('tapehouse')]);
+
+    for ($i = 0; $i < 5; $i++) {
+        post('/login', ['email' => $user->email, 'password' => 'wrong'])
+            ->assertSessionHasErrors('email');
+    }
+
+    // The 6th attempt within the same minute must be throttled, not
+    // evaluated against the credentials at all — brute-forcing a password is
+    // otherwise unbounded.
+    post('/login', ['email' => $user->email, 'password' => 'wrong'])
+        ->assertStatus(429);
+});
