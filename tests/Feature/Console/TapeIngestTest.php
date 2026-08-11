@@ -124,8 +124,22 @@ it('never broadcasts one operator\'s symbols to another', function (): void {
 
     artisan('tape:ingest', ['--once' => true, '--passes' => 40])->assertSuccessful();
 
-    Event::assertDispatched(QuotesUpdated::class, function (QuotesUpdated $e) use ($alice): bool {
-        return $e->userId !== $alice->id
-            || collect($e->quotes)->pluck('ticker')->every(fn (string $t): bool => $t === 'AAPL');
-    });
+    $ownTicker = [$alice->id => 'AAPL', $bob->id => 'MSFT'];
+
+    // Assert over EVERY dispatched event. A closure handed to
+    // assertDispatched only has to be satisfied by ONE event, so an
+    // existential check passes happily while a leaking frame sits beside it.
+    $events = Event::dispatched(QuotesUpdated::class)->map(
+        fn (array $args): QuotesUpdated => $args[0]
+    );
+
+    expect($events)->not->toBeEmpty();
+
+    foreach ($events as $event) {
+        expect($ownTicker)->toHaveKey($event->userId);
+
+        foreach ($event->quotes as $quote) {
+            expect($quote['ticker'])->toBe($ownTicker[$event->userId]);
+        }
+    }
 });
