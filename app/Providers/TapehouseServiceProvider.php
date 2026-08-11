@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Services\Budget\CreditBudget;
 use App\Services\Control\FeedControl;
 use App\Services\Metrics\FeedMetrics;
+use App\Services\Quotes\QuoteBroadcaster;
 use App\Services\Quotes\QuoteCache;
 use App\Services\Quotes\TickBuffer;
 use App\Services\Upstream\TwelveDataClient;
@@ -48,6 +49,13 @@ class TapehouseServiceProvider extends ServiceProvider
                 new Client,
                 (string) $this->config($app)->get('tapehouse.api_key'),
                 (string) $this->config($app)->get('tapehouse.rest_url'),
+            );
+        });
+
+        $this->app->singleton(QuoteBroadcaster::class, function ($app): QuoteBroadcaster {
+            return new QuoteBroadcaster(
+                $app->make('events'),
+                (int) $this->config($app)->get('tapehouse.broadcast.coalesce_ms'),
             );
         });
     }

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Watchlist;
 use App\Services\Control\FeedControl;
 use App\Services\Quotes\QuoteCache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 
 use function Pest\Laravel\artisan;
@@ -17,6 +18,13 @@ beforeEach(function (): void {
     Redis::connection()->flushdb();
     config()->set('tapehouse.simulator.enabled', true);
     config()->set('tapehouse.simulator.interval_ms', 0);
+
+    // The driver manager and quote broadcaster now dispatch real
+    // ShouldBroadcast events on every transition/flush. Nothing here asserts
+    // on those events, and this suite has no Reverb server to receive them —
+    // without the fake, dispatch() reaches the Pusher-protocol broadcaster
+    // and every test fails on a real connection refused.
+    Event::fake();
 });
 
 function seedWatchlist(int $count = 3): void

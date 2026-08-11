@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\Symbol;
+use App\Models\Watchlist;
 use App\Services\Budget\CreditBudget;
 use App\Services\Control\FeedControl;
 use App\Services\Metrics\FeedMetrics;
+use App\Services\Quotes\QuoteBroadcaster;
 use App\Services\Quotes\QuoteCache;
 use App\Services\Quotes\TickBuffer;
 use App\Services\Upstream\DriverManager;
@@ -19,6 +21,7 @@ use App\Services\Upstream\UpstreamDriver;
 use App\Services\Upstream\WebSocketDriver;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
 use Ratchet\Client\Connector;
@@ -46,6 +49,8 @@ final class TapeIngest extends Command
         QuoteCache $cache,
         TickBuffer $buffer,
         FeedMetrics $metrics,
+        QuoteBroadcaster $broadcaster,
+        Dispatcher $events,
     ): int {
         $tickers = $this->resolveTickers();
 
@@ -54,6 +59,8 @@ final class TapeIngest extends Command
 
             return self::SUCCESS;
         }
+
+        $userId = (int) (Watchlist::query()->value('user_id') ?? 0);
 
         $primary = $this->buildPrimary($config, $client, $budget, $redis, $tickers);
         $fallback = new PollingDriver(
@@ -70,9 +77,10 @@ final class TapeIngest extends Command
             $control,
             $redis,
             (array) $config->get('tapehouse.driver.promotion_backoff'),
+            $events,
         );
 
-        $onQuote = function (Quote $quote) use ($cache, $buffer, $metrics): void {
+        $onQuote = function (Quote $quote) use ($cache, $buffer, $metrics, $broadcaster, $userId): void {
             $cache->put($quote);
             $metrics->recordLag($quote->lagMs());
             $metrics->recordTick();
@@ -82,6 +90,10 @@ final class TapeIngest extends Command
             if (isset($this->symbolIds[$quote->ticker])) {
                 $buffer->add($quote, $this->symbolIds[$quote->ticker]);
             }
+
+            if ($userId > 0) {
+                $broadcaster->add($quote, $userId);
+            }
         };
 
         $manager->boot($tickers, $onQuote);
@@ -90,9 +102,9 @@ final class TapeIngest extends Command
 
         try {
             if ($this->option('once')) {
-                $this->runBounded($manager, $buffer, (int) $this->option('passes'));
+                $this->runBounded($manager, $buffer, $broadcaster, (int) $this->option('passes'));
             } else {
-                $this->runLoop($manager, $buffer);
+                $this->runLoop($manager, $buffer, $broadcaster);
             }
         } finally {
             // Without this every buffered tick below the flush threshold is
@@ -101,6 +113,7 @@ final class TapeIngest extends Command
             // finally block in the first place.
             try {
                 $buffer->flush();
+                $broadcaster->flush();
             } catch (Throwable $e) {
                 $this->error('flush on shutdown failed: '.$e->getMessage());
             }
@@ -110,7 +123,7 @@ final class TapeIngest extends Command
         return self::SUCCESS;
     }
 
-    private function runBounded(DriverManager $manager, TickBuffer $buffer, int $passes): void
+    private function runBounded(DriverManager $manager, TickBuffer $buffer, QuoteBroadcaster $broadcaster, int $passes): void
     {
         for ($i = 0; $i < max(1, $passes); $i++) {
             $manager->supervise();
@@ -118,22 +131,25 @@ final class TapeIngest extends Command
         }
 
         $buffer->flushIfDue();
+        $broadcaster->flushIfDue();
     }
 
-    private function runLoop(DriverManager $manager, TickBuffer $buffer): void
+    private function runLoop(DriverManager $manager, TickBuffer $buffer, QuoteBroadcaster $broadcaster): void
     {
         Loop::addPeriodicTimer(0.25, static function () use ($manager): void {
             $manager->supervise();
             $manager->current()->tick();
         });
 
-        Loop::addPeriodicTimer(1.0, static function () use ($buffer): void {
+        Loop::addPeriodicTimer(1.0, static function () use ($buffer, $broadcaster): void {
             $buffer->flushIfDue();
+            $broadcaster->flushIfDue();
         });
 
         foreach ([SIGTERM, SIGINT] as $signal) {
-            Loop::addSignal($signal, static function () use ($buffer, $manager): void {
+            Loop::addSignal($signal, static function () use ($buffer, $broadcaster, $manager): void {
                 $buffer->flush();
+                $broadcaster->flush();
                 $manager->stopAll();
                 Loop::stop();
             });
