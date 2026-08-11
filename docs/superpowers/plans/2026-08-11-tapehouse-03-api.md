@@ -416,7 +416,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   - `QuotesUpdated` — broadcasts as `quotes.updated` on `private-tape.{userId}`, payload `['quotes' => list<array>]`
   - `FeedStateChanged` — broadcasts as `feed.state` on `private-ops`
   - `QuoteBroadcaster::__construct(Dispatcher $events, int $coalesceMs)`, `add(Quote $q, int $userId): void`, `flushIfDue(): int`, `flush(): int`
-  - `DriverManager::__construct(..., ?QuoteBroadcaster $broadcaster = null)` — an optional final slot so Plan 2's `final` class gains the hook without a redesign
+  - `DriverManager::__construct(..., ?Dispatcher $events = null)` — an optional final slot so Plan 2's `final` class gains the hook without a redesign. It takes the event dispatcher, not the broadcaster: the manager dispatches `FeedStateChanged` itself, while `QuoteBroadcaster` is fed from `TapeIngest`'s quote callback.
+  - `TapeIngest::handle(..., QuoteBroadcaster $broadcaster, Dispatcher $events)` — both resolved by method injection
 
 - [ ] **Step 1: Write the failing tests**
 
