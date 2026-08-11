@@ -891,7 +891,9 @@ it('filters by ticker or name, case-insensitively', function (): void {
 });
 
 it('honours the limit and caps it', function (): void {
-    Symbol::factory()->count(30)->create();
+    // Sixty, not thirty: the cap assertion below is vacuous unless more rows
+    // exist than the cap allows through.
+    Symbol::factory()->count(60)->create();
 
     actingAs(User::factory()->create());
 
@@ -1259,11 +1261,16 @@ use Illuminate\Http\Response;
 
 class WatchlistController extends Controller
 {
-    public function show(Request $request): WatchlistResource
+    public function show(Request $request): JsonResponse
     {
         $watchlist = $this->watchlistFor($request);
 
-        return new WatchlistResource($watchlist->load('symbols'));
+        // Explicit 200. firstOrCreate() marks a new row wasRecentlyCreated,
+        // and Laravel's ResourceResponse upgrades that to 201 — which on a GET
+        // misleads every client and cache in the chain.
+        return (new WatchlistResource($watchlist->load('symbols')))
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 
     public function store(StoreWatchlistSymbolRequest $request): JsonResponse
