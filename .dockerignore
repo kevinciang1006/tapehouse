@@ -1,0 +1,64 @@
+# Keep the production build context lean and avoid leaking dev-only state
+# into COPY layers. The image builds its own vendor/ (composer stage) and
+# public/build/ (node stage) from scratch, so both are excluded even though
+# they may exist on the host — a stale host copy must never shadow what the
+# image stages produce.
+.git
+.gitignore
+.gitattributes
+.dockerignore
+.env
+.env.*
+!.env.example
+
+node_modules
+vendor
+public/build
+
+# Framework boot-cache from a HOST `composer install` (which includes
+# require-dev packages, e.g. laravel/pail). Copying these in verbatim
+# would ship a package manifest that names classes the image's --no-dev
+# vendor/ doesn't have, so `php artisan migrate` (the very first thing
+# entrypoint.sh runs) would fatal with a "Class ... not found" before the
+# app ever gets to boot. Excluding them makes Laravel regenerate both
+# fresh, from this image's own --no-dev vendor/, the first time anything
+# actually boots the app inside the container — bootstrap/cache is
+# writable by the runtime user for exactly this.
+bootstrap/cache/*.php
+
+# Same problem, different directory: storage/logs/laravel.log and the
+# framework's compiled view/session cache are host dev-session artifacts
+# (untracked — see storage/logs/.gitignore's `*` — but not excluded from
+# the build context unless listed here). A stale laravel.log baked into
+# an image layer is a minor hygiene issue; stale storage/framework/sessions/*
+# is worse, since those files are host dev session payloads. The runtime
+# stage's own `mkdir -p storage/framework/...` (see Dockerfile) recreates
+# every one of these as empty directories regardless.
+storage/logs/*.log
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+
+tests
+.superpowers
+docs
+
+.editorconfig
+.phpunit.result.cache
+.phpunit.cache
+*.log
+
+docker-compose.yml
+README.md
+# NOTE: docker/ itself is NOT excluded — the Dockerfile COPYs
+# docker/nginx/prod.conf, docker/supervisor/supervisord.conf,
+# docker/entrypoint.sh and docker/php/prod.ini out of this same build
+# context, so ignoring the directory would break those COPY steps.
+
+.DS_Store
+.idea
+.vscode
+.nova
+.zed
+.cursor

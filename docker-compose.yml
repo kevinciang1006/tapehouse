@@ -1,0 +1,166 @@
+name: tapehouse
+
+# Development stack. Postgres and Redis get named volumes so `docker compose
+# down` (without `-v`) keeps data across restarts; only `down -v` wipes them.
+#
+# Every PHP service depends on postgres AND redis with `condition:
+# service_healthy`, not the default `service_started`. `started` only means
+# the container process launched — Postgres and Redis both take a moment
+# past that before they accept connections, and on a cold `up` the ingest
+# loop and the queue worker both connect within their first tick. Depending
+# on mere `started` lets that race: the ingest command's first DB query dies
+# before the retry/backoff logic in DriverManager ever gets a chance to run,
+# so the container exits and compose has to restart it — `healthy` avoids
+# the race outright instead of papering over it with a restart policy.
+
+x-php-env: &php-env
+  # Postgres and Redis are reached by their compose service name, not
+  # 127.0.0.1 — DB_HOST/REDIS_HOST in .env target the host machine's own
+  # native Postgres/Redis (see the "NEVER flushdb Redis db 0" rule: that
+  # native Redis is a different instance from the one in this stack, and
+  # these overrides are what keep them from ever colliding).
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: tapehouse
+  DB_USERNAME: tapehouse
+  DB_PASSWORD: tapehouse
+  # phpredis throws on the argument shape CreditBudget's token-bucket Lua
+  # script passes to Connection::command('eval', ...); predis is the only
+  # client this codebase supports. Set here, not left to whatever .env or
+  # the image's default happens to be, so that fact can't quietly drift.
+  REDIS_CLIENT: predis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  BROADCAST_CONNECTION: reverb
+  # Must resolve on the compose network for server-to-server calls (the
+  # queue worker's Reverb HTTP publish, and Reverb's own bind target), so
+  # this is the "reverb" service name rather than the 127.0.0.1 that .env
+  # uses for host-only (non-Docker) dev.
+  REVERB_HOST: reverb
+  REVERB_PORT: "8080"
+  REVERB_SCHEME: http
+  # The browser is a different audience reading the SAME REVERB_HOST/PORT
+  # config through a different key (config('broadcasting.connections.
+  # reverb.options.client_host'), rendered into the `reverb-host` meta tag
+  # in resources/views/layouts/app.blade.php) — and it cannot resolve
+  # "reverb" at all; that hostname only exists on the compose network, not
+  # on the developer's own machine where the browser runs. Previously this
+  # stack left the meta tag rendering "reverb" too, so the console looked
+  # fully healthy (migrations ran, Reverb reported healthy, the queue
+  # worker's publishes succeeded) while every browser's WebSocket
+  # handshake failed silently and the tape never moved. REVERB_CLIENT_HOST
+  # is the fix: it overrides just the client-facing value, independently
+  # of REVERB_HOST above, to the one address a browser on the host machine
+  # can actually reach this same Reverb server through — port 8080 is
+  # published straight to the host (see the `reverb` service below).
+  REVERB_CLIENT_HOST: 127.0.0.1
+
+x-php-build: &php-build
+  context: .
+  dockerfile: docker/php/Dockerfile
+  target: dev
+
+x-php-healthcheck-deps: &php-healthcheck-deps
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tapehouse
+      POSTGRES_USER: tapehouse
+      POSTGRES_PASSWORD: tapehouse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tapehouse -d tapehouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # php-fpm, fronted by nginx below. Source is bind-mounted so an edit on
+  # the host is live immediately — no rebuild, no container restart.
+  app:
+    build: *php-build
+    volumes:
+      - .:/var/www/html
+    env_file: [.env]
+    environment: *php-env
+    depends_on: *php-healthcheck-deps
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - .:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8000:80"
+    depends_on:
+      - app
+
+  reverb:
+    build: *php-build
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    volumes:
+      - .:/var/www/html
+    env_file: [.env]
+    environment: *php-env
+    ports:
+      - "8080:8080"
+    depends_on: *php-healthcheck-deps
+
+  # Broadcast events (QuotesUpdated, AlertFired) are queued ShouldBroadcast
+  # on the redis queue connection — the ingest loop only ever puts a job on
+  # that queue, it never talks to Reverb directly. This worker is what
+  # actually pulls the job off and delivers it to Reverb. Comment this
+  # service out "to simplify the stack" and nothing errors: ingest keeps
+  # logging ticks, Reverb keeps reporting healthy, migrations still run —
+  # but queue_depth on the ops panel climbs without bound and every open
+  # tape freezes at its last tick, because no frame is ever actually
+  # delivered to a browser. Do not remove it.
+  queue:
+    build: *php-build
+    command: php artisan queue:work --tries=3 --max-time=3600
+    volumes:
+      - .:/var/www/html
+    env_file: [.env]
+    environment: *php-env
+    depends_on: *php-healthcheck-deps
+
+  ingest:
+    build: *php-build
+    command: php artisan tape:ingest
+    volumes:
+      - .:/var/www/html
+    env_file: [.env]
+    environment:
+      <<: *php-env
+      # Passed through from whatever is in the host shell/.env at `up`
+      # time, defaulting to false, so a developer who hasn't set up a
+      # Twelve Data key still gets a moving tape: run
+      # `TAPEHOUSE_SIMULATOR_ENABLED=true docker compose up -d` and
+      # TapeIngest builds a SimulatedDriver instead of hitting Twelve Data.
+      TAPEHOUSE_SIMULATOR_ENABLED: ${TAPEHOUSE_SIMULATOR_ENABLED:-false}
+    depends_on: *php-healthcheck-deps
+
+volumes:
+  postgres-data:
+  redis-data:

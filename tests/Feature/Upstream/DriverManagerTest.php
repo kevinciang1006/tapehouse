@@ -6,6 +6,7 @@ use App\Enums\DriverState;
 use App\Events\FeedStateChanged;
 use App\Models\FeedEvent;
 use App\Services\Control\FeedControl;
+use App\Services\Metrics\FeedMetrics;
 use App\Services\Upstream\DriverManager;
 use App\Services\Upstream\DTO\Quote;
 use App\Services\Upstream\UpstreamDriver;
@@ -202,6 +203,54 @@ it('caps the backoff at the last configured value', function (): void {
     }
 
     expect($m->currentBackoffSeconds())->toBe(300);
+});
+
+it('clears the lag window on demotion so the panel does not keep reporting the outgoing driver', function (): void {
+    $metrics = new FeedMetrics(Redis::connection());
+    $metrics->recordLag(9999);
+
+    $primary = fakeDriver(DriverState::WebSocket);
+    $m = new DriverManager(
+        $primary,
+        fakeDriver(DriverState::Polling),
+        new FeedControl(Redis::connection()),
+        Redis::connection(),
+        [60, 120, 300],
+        null,
+        $metrics,
+    );
+    $m->boot(['AAPL'], fn (Quote $q) => null);
+
+    $primary->healthy = false;
+    $m->supervise();
+
+    expect(Redis::connection()->llen('tape:metrics:lag'))->toBe(0);
+});
+
+it('clears the lag window on promotion too', function (): void {
+    $metrics = new FeedMetrics(Redis::connection());
+
+    $primary = fakeDriver(DriverState::WebSocket);
+    $m = new DriverManager(
+        $primary,
+        fakeDriver(DriverState::Polling),
+        new FeedControl(Redis::connection()),
+        Redis::connection(),
+        [60, 120, 300],
+        null,
+        $metrics,
+    );
+    $m->boot(['AAPL'], fn (Quote $q) => null);
+
+    $primary->healthy = false;
+    $m->supervise();
+    $metrics->recordLag(9999);
+
+    $primary->healthy = true;
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-10 12:01:01'));
+    $m->supervise();
+
+    expect(Redis::connection()->llen('tape:metrics:lag'))->toBe(0);
 });
 
 it('stops every driver when the control flag is set', function (): void {

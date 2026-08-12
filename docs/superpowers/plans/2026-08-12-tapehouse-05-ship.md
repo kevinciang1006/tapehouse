@@ -303,7 +303,17 @@ Sections:
 7. **Known limitations** — this section is required, and must include:
    - **`tape:ingest` reads the watchlist only at boot.** A symbol added in the console does not tick until ingest restarts. This is the one that will bite a reviewer, because the console invites the action.
    - **A queue worker must be running** or no broadcast reaches the browser; `queue_depth` climbing on the ops panel is the symptom.
-   - The WebSocket driver has never run against a live upstream, because the trial key was never populated. Polling and the demotion path are exercised; the streaming path is implemented but unverified end to end.
+   - **What has and has not been verified against the live upstream.** Both
+     transports have now run against the real Twelve Data API: REST polling
+     wrote real quotes, and the WebSocket driver streamed real ticks. The
+     automatic **demotion** path has never fired against a genuine upstream
+     rejection — it is covered by unit tests only, because the key in use was
+     never rejected.
+   - **Under polling, "lag" measures quote age, not network transit.**
+     `/quote` returns the last quote's own timestamp, so against a closed
+     market the ops panel's p50/p95 reads as hours. That is honest — the data
+     really is that old — but it is not the sub-second figure the streaming
+     path produces.
 8. **Testing** — how to run, and what the suite actually covers (the token bucket's atomicity and partial grants, driver demotion and promotion, the polling cursor under starvation, tick-buffer batching, alert cooldowns, cross-operator isolation, and the cross-tenant broadcast guard).
 9. **Git Flow** — `main`, `develop`, `feature/*`.
 

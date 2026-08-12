@@ -28,7 +28,15 @@ module.exports = (env, argv) => {
                 },
                 {
                     test: /\.scss$/,
-                    use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+                    use: [
+                        MiniCssExtractPlugin.loader,
+                        // url: false — font @font-face src url()s are root-relative
+                        // paths into public/fonts (self-hosted, not bundled), not
+                        // webpack module requests. Nothing else in the SCSS uses
+                        // url(), so disabling resolution entirely is safe.
+                        { loader: 'css-loader', options: { url: false } },
+                        'sass-loader',
+                    ],
                 },
             ],
         },

@@ -122,6 +122,7 @@ final class TapeIngest extends Command
             $redis,
             (array) $config->get('tapehouse.driver.promotion_backoff'),
             $events,
+            $metrics,
         );
 
         $onQuote = function (Quote $quote) use ($cache, $buffer, $metrics, $broadcaster, $watchers): void {

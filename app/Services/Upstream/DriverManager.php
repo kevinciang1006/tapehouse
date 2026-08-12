@@ -9,6 +9,7 @@ use App\Enums\FeedEventLevel;
 use App\Events\FeedStateChanged;
 use App\Models\FeedEvent;
 use App\Services\Control\FeedControl;
+use App\Services\Metrics\FeedMetrics;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Redis\Connections\Connection;
@@ -47,6 +48,7 @@ final class DriverManager
         private readonly Connection $redis,
         private readonly array $promotionBackoff,
         private readonly ?Dispatcher $events = null,
+        private readonly ?FeedMetrics $metrics = null,
     ) {
         $this->current = $primary;
         $this->state = $primary->name();
@@ -147,6 +149,11 @@ final class DriverManager
         $this->demotions++;
         $this->reconnects++;
         $this->demotedAt = CarbonImmutable::now();
+        // The lag window has no TTL of its own: without this, the ops
+        // panel keeps reporting the outgoing driver's lag (blended with,
+        // then eventually replaced by, the new driver's) for up to 500
+        // samples after a switch that just happened.
+        $this->metrics?->clearLag();
 
         $this->transitionTo(
             $this->fallback,
@@ -164,6 +171,7 @@ final class DriverManager
         $this->fallback->stop();
         $this->current = $this->primary;
         $this->demotedAt = null;
+        $this->metrics?->clearLag();
 
         $this->transitionTo(
             $this->primary,
