@@ -5,59 +5,29 @@
 // fetched stylesheet); the interface has no need for Cyrillic, Greek or
 // Vietnamese glyphs.
 //
-// Inter and Space Grotesk were served as variable fonts: the same binary
-// backed every weight, and the browser instances the requested weight from
-// the file when the @font-face rule declares a single discrete font-weight.
-// Each weight below points at its own vendored copy of that binary
-// (identical bytes, legible per-weight filenames) rather than a single
-// shared file, so every rule here is self-contained.
+// Inter and Space Grotesk are served as variable fonts: a single binary
+// covers every weight in its range, and the browser instances the requested
+// weight from that one file. Each is vendored once and its @font-face rule
+// declares the weight range the file actually supports (`font-weight: 400
+// 600` etc.), not a single discrete weight — shipping a byte-identical copy
+// per weight would triple the transfer for zero benefit. IBM Plex Mono has
+// no variable release; its three weights are genuinely distinct static
+// binaries, so each keeps its own file and its own discrete-weight rule.
 
 @font-face {
-    font-family: 'Space Grotesk';
+    font-family: 'Inter';
     font-style: normal;
-    font-weight: 500;
+    font-weight: 400 600;
     font-display: swap;
-    src: url('/fonts/space-grotesk-500.woff2') format('woff2');
-}
-
-@font-face {
-    font-family: 'Space Grotesk';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('/fonts/space-grotesk-600.woff2') format('woff2');
+    src: url('/fonts/inter.woff2') format('woff2');
 }
 
 @font-face {
     font-family: 'Space Grotesk';
     font-style: normal;
-    font-weight: 700;
+    font-weight: 500 700;
     font-display: swap;
-    src: url('/fonts/space-grotesk-700.woff2') format('woff2');
-}
-
-@font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('/fonts/inter-400.woff2') format('woff2');
-}
-
-@font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 500;
-    font-display: swap;
-    src: url('/fonts/inter-500.woff2') format('woff2');
-}
-
-@font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('/fonts/inter-600.woff2') format('woff2');
+    src: url('/fonts/space-grotesk.woff2') format('woff2');
 }
 
 @font-face {
