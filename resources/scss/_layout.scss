@@ -1,0 +1,376 @@
+// The three-zone shell: a fixed-height status bar on top, then a flex row of
+// rail / tape / right-panel that fills the rest of the viewport. The shell
+// itself never scrolls — each zone scrolls its own content internally.
+
+.shell {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    color: var(--ink);
+}
+
+// --- Status bar ------------------------------------------------------------
+
+.statusbar {
+    height: var(--h-statusbar);
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--panel);
+}
+
+.wordmark {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+}
+
+.statusbar__driver {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.driver-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1.5px solid var(--muted);
+    background: transparent;
+}
+
+// Lit vs dark, not green vs red: up/down are reserved for price deltas and
+// the flash, so "the feed answered" reads as a filled ink dot, and "it
+// didn't" (a driver of stopped, or a failed health poll) falls back to the
+// base rule below — an empty, muted-bordered circle.
+.driver-dot.is-live {
+    border-color: var(--ink);
+    background: var(--ink);
+}
+
+.statusbar__credits {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 4px;
+}
+
+.credit-bars {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+
+.credit-bar {
+    width: 11px;
+    height: 5px;
+    background: var(--rule);
+}
+
+.credit-bar.is-filled {
+    background: var(--ink);
+}
+
+.statusbar__right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.statusbar__lag {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.btn {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.btn--ghost {
+    color: var(--ink);
+    background: var(--panel);
+    border-color: var(--rule);
+    padding: 6px 12px;
+}
+
+.btn--ghost:hover {
+    border-color: var(--ink);
+}
+
+.btn--signal {
+    color: var(--panel);
+    background: var(--signal);
+    padding: 7px 13px;
+}
+
+.btn--signal:hover {
+    background: var(--ink);
+}
+
+// --- Degraded banner ---------------------------------------------------
+
+.banner--degraded {
+    flex: none;
+    height: var(--h-banner);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--panel);
+    font-size: 12px;
+    color: var(--ink);
+}
+
+.banner--degraded[hidden] {
+    display: none;
+}
+
+// --- Body row: rail / tape / right panel --------------------------------
+
+.body-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+.rail {
+    width: var(--w-rail);
+    flex: none;
+    border-right: 1px solid var(--rule);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 14px;
+    gap: 18px;
+}
+
+.rail-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    padding: 6px 0;
+    cursor: pointer;
+    box-shadow: inset 2px 0 0 transparent;
+}
+
+.rail-item:hover {
+    box-shadow: inset 2px 0 0 var(--rule);
+}
+
+.rail-item.is-active {
+    box-shadow: inset 2px 0 0 var(--signal);
+}
+
+.rail-item__icon {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--muted);
+}
+
+.rail-item.is-active .rail-item__icon {
+    border-color: var(--ink);
+}
+
+.rail-item__icon--square {
+    // default square, no extra rule
+}
+
+.rail-item__icon--circle {
+    border-radius: 50%;
+}
+
+.rail-item__icon--diamond {
+    transform: rotate(45deg);
+}
+
+.rail-item__label {
+    font-family: var(--font-label);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.rail-item.is-active .rail-item__label {
+    color: var(--ink);
+}
+
+.tape-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-right: 1px solid var(--rule);
+}
+
+.panel-header {
+    height: var(--h-header);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.panel-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.tape-body {
+    flex: 1;
+    overflow: auto;
+}
+
+.right-panel {
+    width: var(--w-panel);
+    flex: none;
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+}
+
+// The right panel holds two sibling views — ops (Task 4) and alerts (this
+// task) — and alerts.js's rail wiring toggles which one is unhidden. Each
+// view re-establishes the flex column .right-panel itself used to be
+// directly, so nothing inside (like .event-log-body's flex: 1) has to change
+// now that it is nested one level deeper.
+.right-panel__view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.right-panel__view[hidden] {
+    display: none;
+}
+
+.ops-stats {
+    flex: none;
+    padding: 14px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.ops-stats__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.ops-stats__label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.event-log-body {
+    flex: 1;
+    overflow: auto;
+}
+
+// --- Auth screen -----------------------------------------------------------
+//
+// The login screen is the one other full-page layout this task ships, so its
+// chrome lives here rather than pulling in a dedicated partial before there
+// is a second view to justify one.
+
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--paper);
+}
+
+.auth-card {
+    width: 360px;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 32px 32px 28px;
+}
+
+.auth-card__wordmark {
+    font-family: var(--font-label);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.14em;
+}
+
+.auth-card__subtitle {
+    margin-top: 6px;
+}
+
+.auth-card__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 26px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.form-input {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 9px 10px;
+    width: 100%;
+}
+
+// Monochrome by design — up/down are reserved for price deltas and the
+// flash, never a form validation state. Weight, not colour, is what marks
+// this as an error (same reasoning as .field-error in _forms.scss).
+.form-error {
+    font-size: 12px;
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.auth-card__submit {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 11px 12px;
+    margin-top: 4px;
+    width: 100%;
+}
+
+.auth-card__footnote {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--muted);
+}

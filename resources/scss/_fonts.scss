@@ -1,0 +1,55 @@
+// Self-hosted fonts. All three families were fetched once from Google's
+// webfont CSS API and are vendored here so the console never makes an
+// external font request at runtime — no reliance on any third-party font
+// host. Latin subset only (unicode-range starting U+0000-00FF in the
+// fetched stylesheet); the interface has no need for Cyrillic, Greek or
+// Vietnamese glyphs.
+//
+// Inter and Space Grotesk are served as variable fonts: a single binary
+// covers every weight in its range, and the browser instances the requested
+// weight from that one file. Each is vendored once and its @font-face rule
+// declares the weight range the file actually supports (`font-weight: 400
+// 600` etc.), not a single discrete weight — shipping a byte-identical copy
+// per weight would triple the transfer for zero benefit. IBM Plex Mono has
+// no variable release; its three weights are genuinely distinct static
+// binaries, so each keeps its own file and its own discrete-weight rule.
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url('/fonts/inter.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 500 700;
+    font-display: swap;
+    src: url('/fonts/space-grotesk.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-600.woff2') format('woff2');
+}

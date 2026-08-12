@@ -1,0 +1,27 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "scripts": {
+        "dev": "webpack --mode development --watch",
+        "build": "webpack --mode production",
+        "test:js": "node --test \"resources/js/**/*.test.mjs\""
+    },
+    "devDependencies": {
+        "@babel/core": "^8.0.1",
+        "@babel/preset-env": "^8.0.2",
+        "babel-loader": "^10.1.1",
+        "css-loader": "^7.1.4",
+        "css-minimizer-webpack-plugin": "^8.0.0",
+        "mini-css-extract-plugin": "^2.10.2",
+        "sass": "^1.102.0",
+        "sass-loader": "^17.0.0",
+        "webpack": "^5.109.2",
+        "webpack-cli": "^7.2.2",
+        "webpack-manifest-plugin": "^6.0.1"
+    },
+    "dependencies": {
+        "jquery": "3.7.1",
+        "laravel-echo": "^2.4.0",
+        "pusher-js": "^8.6.0"
+    }
+}
