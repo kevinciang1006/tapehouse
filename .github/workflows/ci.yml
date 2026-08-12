@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: tapehouse_test
+          POSTGRES_USER: tapehouse
+          POSTGRES_PASSWORD: tapehouse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tapehouse -d tapehouse_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Shared by every PHP step below. REDIS_CLIENT=predis is mandatory, not
+    # a preference: CreditBudget's token-bucket call goes through
+    # Connection::command('eval', ...), whose argument shape phpredis
+    # rejects. TWELVEDATA_API_KEY is a dummy so nothing in the suite can
+    # accidentally reach the real Twelve Data API.
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: tapehouse_test
+      DB_USERNAME: tapehouse
+      DB_PASSWORD: tapehouse
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      REDIS_CLIENT: predis
+      TWELVEDATA_API_KEY: test-key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, pcntl, sockets
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # This project's whole premise is the stack (self-hosted plain
+      # Webpack + SCSS, jQuery 3.7.x — no Vite, no Tailwind, no Laravel
+      # Mix). Three separate reviews had to verify that by hand, one of
+      # which caught jQuery silently resolving to 4.x via a loose
+      # caret/tilde range. This step makes a stack regression a CI
+      # failure instead of something a fourth human has to notice.
+      - name: Assert stack constraints
+        run: |
+          if grep -rniE "vite|tailwind|laravel-mix" package.json webpack.config.js resources/ config/ composer.json; then
+            echo "::error::Vite/Tailwind/Laravel Mix must not appear — this project deliberately uses Webpack and plain SCSS."
+            exit 1
+          fi
+          node -e "
+            const v = require('./package.json').dependencies.jquery;
+            if (!/^3\.7/.test(v)) { console.error('jQuery must be 3.7.x, got ' + v); process.exit(1); }
+          "
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # MUST run before any PHP test step: Manifest::asset() throws by
+      # design when public/build/manifest.json is missing (it's gitignored,
+      # so a clean checkout never has it), and four ConsoleViewTest cases
+      # 500 without it.
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Run JS tests
+        run: npm run test:js
+
+      - name: Prepare application environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Check code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan)
+        run: vendor/bin/phpstan analyse --memory-limit=512M
+
+      - name: Run PHP test suite
+        run: php artisan test
