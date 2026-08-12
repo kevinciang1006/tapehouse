@@ -1,0 +1,85 @@
+// Self-hosted fonts. All three families were fetched once from Google's
+// webfont CSS API and are vendored here so the console never makes an
+// external font request at runtime — no reliance on any third-party font
+// host. Latin subset only (unicode-range starting U+0000-00FF in the
+// fetched stylesheet); the interface has no need for Cyrillic, Greek or
+// Vietnamese glyphs.
+//
+// Inter and Space Grotesk were served as variable fonts: the same binary
+// backed every weight, and the browser instances the requested weight from
+// the file when the @font-face rule declares a single discrete font-weight.
+// Each weight below points at its own vendored copy of that binary
+// (identical bytes, legible per-weight filenames) rather than a single
+// shared file, so every rule here is self-contained.
+
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/space-grotesk-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/fonts/space-grotesk-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/fonts/space-grotesk-700.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/inter-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/inter-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/fonts/inter-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-600.woff2') format('woff2');
+}
