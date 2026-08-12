@@ -38,16 +38,25 @@ x-php-env: &php-env
   # Must resolve on the compose network for server-to-server calls (the
   # queue worker's Reverb HTTP publish, and Reverb's own bind target), so
   # this is the "reverb" service name rather than the 127.0.0.1 that .env
-  # uses for host-only (non-Docker) dev. That also means the browser-facing
-  # meta tags in resources/views/layouts/app.blade.php — which read this
-  # same config key — will render `reverb-host="reverb"` when the console is
-  # loaded through this stack. Add `127.0.0.1 reverb` to your machine's
-  # /etc/hosts to let a browser on the host resolve it too; giving the
-  # client and server independent hostnames would mean touching that Blade
-  # file and resources/js/modules/echo.js, which is out of scope here.
+  # uses for host-only (non-Docker) dev.
   REVERB_HOST: reverb
   REVERB_PORT: "8080"
   REVERB_SCHEME: http
+  # The browser is a different audience reading the SAME REVERB_HOST/PORT
+  # config through a different key (config('broadcasting.connections.
+  # reverb.options.client_host'), rendered into the `reverb-host` meta tag
+  # in resources/views/layouts/app.blade.php) — and it cannot resolve
+  # "reverb" at all; that hostname only exists on the compose network, not
+  # on the developer's own machine where the browser runs. Previously this
+  # stack left the meta tag rendering "reverb" too, so the console looked
+  # fully healthy (migrations ran, Reverb reported healthy, the queue
+  # worker's publishes succeeded) while every browser's WebSocket
+  # handshake failed silently and the tape never moved. REVERB_CLIENT_HOST
+  # is the fix: it overrides just the client-facing value, independently
+  # of REVERB_HOST above, to the one address a browser on the host machine
+  # can actually reach this same Reverb server through — port 8080 is
+  # published straight to the host (see the `reverb` service below).
+  REVERB_CLIENT_HOST: 127.0.0.1
 
 x-php-build: &php-build
   context: .
