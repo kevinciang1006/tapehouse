@@ -21,6 +21,20 @@ final readonly class FeedMetrics
         $this->redis->ltrim(self::LAG_KEY, 0, self::LAG_WINDOW - 1);
     }
 
+    /**
+     * Drops every sample in the rolling lag window. The window has no TTL,
+     * so without an explicit clear a driver switch (e.g. WebSocket ->
+     * polling on demotion) leaves the previous driver's lag samples in the
+     * list — up to 500 of them — and the ops panel reports a stale
+     * percentile blended with, or entirely made of, a driver that is no
+     * longer running. Call this on every driver transition, not just
+     * demotion/promotion.
+     */
+    public function clearLag(): void
+    {
+        $this->redis->del(self::LAG_KEY);
+    }
+
     public function recordTick(): void
     {
         $key = $this->minuteKey();

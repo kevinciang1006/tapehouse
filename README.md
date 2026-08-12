@@ -40,9 +40,9 @@ credit-exhausted demo and always reports itself as `simulated` — never as
 the last price for AAPL" — comes from a Redis hash (`tape:quote:{ticker}`),
 never from Postgres. Every tick is *also* appended to the `ticks` table in
 Postgres through a buffered batch writer (flush on 200 rows or 1 second,
-whichever comes first), which exists purely as the audit trail and the
-source for history/sparkline reads. Postgres is never in the hot path for
-"what is the price right now."
+whichever comes first), which exists purely as the audit trail — no read
+path consumes it yet; history and sparkline reads were cut from scope (see
+§5). Postgres is never in the hot path for "what is the price right now."
 
 **Broadcast coalescing.** A fast-moving symbol can tick many times a
 second; broadcasting one Reverb event per tick would give the browser more
@@ -75,7 +75,7 @@ cooldown so a symbol oscillating around a threshold doesn't spam.
      ┌──────────────────────────────┐
      │ per tick:                    │
      │  → Redis tape:quote:{ticker} │  hot read path (tape, /api/quotes)
-     │  → TickBuffer → Postgres     │  audit path (history, sparkline)
+     │  → TickBuffer → Postgres     │  audit path only, no read path yet
      │  → EvaluateAlerts (queued)   │  never inline
      └───────────────┬───────────────┘
                       │ coalesced 250ms/user
@@ -108,12 +108,32 @@ interviewer finding it first:
 
 ## 6. Running locally
 
-Requires Docker and Docker Compose.
+Requires Docker and Docker Compose, plus PHP 8.4 and Node 22 on the host.
+Run the host installs *before* bringing the stack up:
 
 ```bash
+cp .env.example .env
+composer install
+php artisan key:generate
+npm ci && npm run build
 docker compose up -d --build
 docker compose exec app php artisan migrate:fresh --seed
 ```
+
+`.env.example` ships an empty `APP_KEY`, and Laravel throws
+`MissingAppKeyException` on every request without one — `key:generate` has
+to run on the host, after `composer install` (it needs `vendor/autoload.php`
+to boot at all) and before `docker compose up` (the containers read `.env`
+at start, not live).
+
+The host installs are not optional here: `docker-compose.yml` bind-mounts
+the working tree straight over the image for every PHP service (`app`,
+`reverb`, `queue`, `ingest`), so `vendor/` and `node_modules/` have to
+already exist on the *host* before `up` — the dev image deliberately skips
+`composer install` for exactly that reason. The build is likewise required,
+not cosmetic: `Manifest::asset()` throws by design when
+`public/build/manifest.json` is missing, so a skipped build fails loudly
+with a 500 instead of quietly serving an unstyled console.
 
 This brings up seven services — `postgres`, `redis`, `app` (php-fpm),
 `nginx`, `reverb`, `queue`, and `ingest` — and seeds 40 symbols plus one
@@ -131,14 +151,82 @@ hitting the real upstream:
 TAPEHOUSE_SIMULATOR_ENABLED=true docker compose up -d --build
 ```
 
-## 7. Known limitations
+## 7. Running the production image
+
+The root `Dockerfile` builds one image (`docker build -t tapehouse:local .`)
+that runs all five processes — php-fpm, nginx, Reverb, the queue worker,
+`tape:ingest` — under supervisord, fronted by the single port it exposes,
+8080. It expects Postgres and Redis reachable elsewhere and every setting
+below passed as real container env vars (there is no `.env` inside the
+image). This is a verified working invocation against Postgres/Redis
+containers on a shared Docker network:
+
+```bash
+docker run -d --name tapehouse -p 8080:8080 \
+  --network your-network \
+  -e APP_KEY="base64:$(openssl rand -base64 32)" \
+  -e APP_ENV=production \
+  -e APP_DEBUG=false \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=your-postgres-host \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=tapehouse \
+  -e DB_USERNAME=tapehouse \
+  -e DB_PASSWORD=tapehouse \
+  -e CACHE_STORE=redis \
+  -e QUEUE_CONNECTION=redis \
+  -e SESSION_DRIVER=database \
+  -e REDIS_CLIENT=predis \
+  -e REDIS_HOST=your-redis-host \
+  -e REDIS_PORT=6379 \
+  -e BROADCAST_CONNECTION=reverb \
+  -e REVERB_APP_ID=tapehouse \
+  -e REVERB_APP_KEY=tapehouse-local \
+  -e REVERB_APP_SECRET="$(openssl rand -hex 16)" \
+  -e REVERB_HOST=127.0.0.1 \
+  -e REVERB_PORT=8080 \
+  -e REVERB_SCHEME=http \
+  -e REVERB_CLIENT_HOST=127.0.0.1 \
+  -e TWELVEDATA_API_KEY=your-key \
+  tapehouse:local
+```
+
+Two traps, each verified by getting it wrong first:
+
+- **`REVERB_PORT` must be 8080, not 8081, and there is no separate
+  client-port override.** `host` got a `client_host` split for the browser
+  (`REVERB_CLIENT_HOST`), but `port` did not — the same `REVERB_PORT` value
+  is read by both the queue worker's server-side publish and the
+  `reverb-port` meta tag the browser dials. 8081 is Reverb's real bind
+  address inside the container, but it is not exposed; nginx proxies
+  `/app`/`/apps` from the one exposed port, 8080, through to it (see
+  `docker/nginx/prod.conf`), so 8080 is the one value that works for both
+  audiences — 8081 renders a browser meta tag pointing at a port the image
+  never publishes.
+- **`DB_CONNECTION`/`CACHE_STORE`/`QUEUE_CONNECTION` must be set explicitly.**
+  Leave any of them out and the app falls back to their Laravel defaults
+  (`sqlite`, `database`, `database`) instead of erroring — and depending on
+  what's already on disk, `/login` can still return 200 while the queue
+  worker and `tape:ingest` crash-loop behind it (verified: an omitted
+  `CACHE_STORE`/`QUEUE_CONNECTION` left `/login` at 200 while
+  `supervisorctl status` showed queue and ingest both fatally erroring on a
+  missing `cache` table and an unreachable Redis). A 200 on `/login` alone
+  is not proof the image is correctly configured.
+
+Verify the five processes actually came up:
+
+```bash
+docker exec tapehouse supervisorctl -c /etc/supervisord.conf status
+```
+
+## 8. Known limitations
 
 - **`tape:ingest` reads the watchlist only at boot.** Adding a symbol to the console does not make it tick — the ingest process built its ticker list once at startup and does not re-read it. It needs a restart (`docker compose restart ingest`) to pick up a newly-added symbol. This is the limitation most likely to bite a reviewer, because the console's own "add to watchlist" action invites exactly the workflow that doesn't work without that restart.
 - **A queue worker must be running, or nothing reaches the browser.** `QuotesUpdated` and `AlertFired` are queued `ShouldBroadcast` events on the Redis queue; ingest only ever enqueues them. Without `php artisan queue:work` running, ingest keeps logging ticks and Reverb keeps reporting healthy, but every open tape freezes at its last price and never errors — the diagnostic is `queue_depth` climbing without bound on the ops panel.
 - **What has and has not been verified against the live upstream.** Both transports have run against the real Twelve Data API: REST polling wrote real quotes (SPY 770.56, NVDA 217.50, MSFT 503.81, AAPL 304.91), and the WebSocket driver streamed real ticks (XAU/USD 4395.22, BTC/USD 63,821.15, EUR/USD 1.15388) — reconfirmed on a later run with fresh prices during this same development effort. The automatic **demotion** path, however, has never fired against a genuine upstream rejection — it is unit-tested only (`tests/Feature/Upstream/DriverManagerTest.php`), because the trial key in use has never actually been rejected. Do not read the WebSocket/polling verification as also covering demotion; it doesn't.
 - **Under polling, "lag" measures quote age, not network transit.** Twelve Data's `/quote` endpoint returns the quote's own last-trade timestamp, and `PollingDriver` uses that as `quotedAt`. Against a closed market, that timestamp can be hours old, so the ops panel's p50/p95 reads as hours — which is honest (the data really is that old) but is not the sub-second transit figure the streaming path produces when the market is open.
 
-## 8. Testing
+## 9. Testing
 
 ```bash
 npm run build          # must run first — see CLAUDE.md
@@ -148,7 +236,7 @@ vendor/bin/phpstan analyse --memory-limit=512M
 php artisan test       # or vendor/bin/pest
 ```
 
-The suite (240 Pest tests / 26 JS tests as of this writing) genuinely
+The suite (243 Pest tests / 26 JS tests as of this writing) genuinely
 covers:
 
 - **The token bucket's atomicity and partial grants** — `tests/Feature/Budget/CreditBudgetTest.php` (`is atomic across concurrent consumers`, `grants partially rather than refusing outright`).
@@ -159,7 +247,7 @@ covers:
 - **Cross-operator isolation** — `tests/Feature/Api/WatchlistApiTest.php` (`never lets one operator touch another's watchlist`).
 - **The cross-tenant broadcast guard** — `tests/Feature/Broadcasting/ChannelAuthTest.php` (`refuses a user on someone else's tape channel`).
 
-## 9. Git Flow
+## 10. Git Flow
 
 `main` is the production/deployable branch. `develop` is the integration
 branch. Feature work happens on `feature/*` branches cut from `develop` and

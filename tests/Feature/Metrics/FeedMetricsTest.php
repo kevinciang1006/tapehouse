@@ -63,6 +63,19 @@ it('blends in the previous minute so the count does not sawtooth to zero on roll
     expect($m->ticksPerMinute())->toBe(60 - 15);
 });
 
+it('clears every sample in the lag window', function (): void {
+    $m = new FeedMetrics(Redis::connection());
+
+    foreach (range(1, 10) as $ms) {
+        $m->recordLag($ms);
+    }
+
+    $m->clearLag();
+
+    expect(Redis::connection()->llen('tape:metrics:lag'))->toBe(0)
+        ->and($m->lagPercentiles())->toBe(['p50' => 0, 'p95' => 0]);
+});
+
 it('produces the snapshot the ops panel reads', function (): void {
     $m = new FeedMetrics(Redis::connection());
     $m->recordLag(34);

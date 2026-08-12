@@ -81,7 +81,7 @@ jobs:
           fi
           node -e "
             const v = require('./package.json').dependencies.jquery;
-            if (!/^3\.7/.test(v)) { console.error('jQuery must be 3.7.x, got ' + v); process.exit(1); }
+            if (!/^3\.7\.\d+$/.test(v)) { console.error('jQuery must be pinned to an exact 3.7.x version (no ~ or ^ range) — got ' + JSON.stringify(v)); process.exit(1); }
           "
 
       - name: Cache Composer packages
@@ -92,8 +92,29 @@ jobs:
           restore-keys: |
             composer-${{ runner.os }}-
 
+      # MUST run before "Install PHP dependencies": composer's
+      # post-autoload-dump hook runs `artisan package:discover`, which boots
+      # the framework far enough to resolve routes/channels.php's
+      # Broadcast::channel() calls — eagerly constructing the reverb
+      # broadcaster. That throws (Pusher\Pusher::__construct(): $auth_key
+      # must be string, null given) without a real REVERB_APP_KEY, which
+      # only exists once .env is in place (.env.example already ships a
+      # working REVERB_APP_KEY). Without this, `composer install` fails on
+      # every run and CI can never pass. This step is deliberately just the
+      # copy, not also `php artisan key:generate`: artisan requires
+      # vendor/autoload.php, which does not exist yet at this point in a
+      # cache-miss run — running key:generate here would trade one
+      # first-step failure for another.
+      - name: Create .env file
+        run: cp .env.example .env
+
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-progress
+
+      # Now that vendor/ exists, generate a real APP_KEY for the steps that
+      # actually boot the app (the test suite in particular).
+      - name: Generate application key
+        run: php artisan key:generate
 
       - name: Install Node dependencies
         run: npm ci
@@ -108,11 +129,6 @@ jobs:
       - name: Run JS tests
         run: npm run test:js
 
-      - name: Prepare application environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-
       - name: Check code style (Pint)
         run: vendor/bin/pint --test
 
@@ -121,3 +137,141 @@ jobs:
 
       - name: Run PHP test suite
         run: php artisan test
+
+  # Builds the production image (root Dockerfile) AND runs it against real
+  # service containers — a build-only job would have caught none of the
+  # four defects found while actually writing this Dockerfile: a Reverb
+  # port collision with nginx, a dev-dependency cache leak into the image,
+  # a wrong supervisorctl config path, and an omitted DB_CONNECTION/
+  # CACHE_STORE/QUEUE_CONNECTION silently falling back to sqlite/database
+  # while /login still returned 200. Only actually starting the five
+  # supervised processes against Postgres/Redis and checking their status
+  # catches that class of bug; `docker build` succeeding proves nothing
+  # about any of it.
+  build-image:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: tapehouse
+          POSTGRES_USER: tapehouse
+          POSTGRES_PASSWORD: tapehouse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tapehouse -d tapehouse"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build -t tapehouse:ci .
+
+      # --network host, not the default bridge: this job's steps run
+      # directly on the runner (no job-level `container:`), so the
+      # postgres/redis services above are published to the runner's own
+      # 127.0.0.1, not to a docker network a sibling container can join by
+      # name. Host networking is what lets this container reach them at
+      # 127.0.0.1 the same way `docker run` reaches them from a shell step
+      # — see README.md §7 for the identical pattern against a real
+      # deployment's Postgres/Redis.
+      - name: Run the image against Postgres and Redis
+        run: |
+          docker run -d --name tapehouse --network host \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e APP_ENV=production \
+            -e APP_DEBUG=false \
+            -e DB_CONNECTION=pgsql \
+            -e DB_HOST=127.0.0.1 \
+            -e DB_PORT=5432 \
+            -e DB_DATABASE=tapehouse \
+            -e DB_USERNAME=tapehouse \
+            -e DB_PASSWORD=tapehouse \
+            -e CACHE_STORE=redis \
+            -e QUEUE_CONNECTION=redis \
+            -e SESSION_DRIVER=database \
+            -e REDIS_CLIENT=predis \
+            -e REDIS_HOST=127.0.0.1 \
+            -e REDIS_PORT=6379 \
+            -e BROADCAST_CONNECTION=reverb \
+            -e REVERB_APP_ID=tapehouse \
+            -e REVERB_APP_KEY=tapehouse-ci \
+            -e REVERB_APP_SECRET="$(openssl rand -hex 16)" \
+            -e REVERB_HOST=127.0.0.1 \
+            -e REVERB_PORT=8080 \
+            -e REVERB_SCHEME=http \
+            -e REVERB_CLIENT_HOST=127.0.0.1 \
+            -e TAPEHOUSE_SIMULATOR_ENABLED=true \
+            -e TWELVEDATA_WS_ENABLED=false \
+            -e TWELVEDATA_API_KEY=test-key \
+            tapehouse:ci
+
+      # entrypoint.sh's migrate/config:cache/route:cache/view:cache run
+      # synchronously before it execs supervisord — polling supervisorctl
+      # (rather than a fixed sleep) is the readiness signal, because its
+      # RPC socket only exists once that hand-off has actually happened.
+      - name: Wait for the container to finish booting
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec tapehouse supervisorctl -c /etc/supervisord.conf status > /dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container never reached a running supervisord"
+          docker logs tapehouse
+          exit 1
+
+      # tape:ingest exits 0 immediately ("no symbols on any watchlist")
+      # until at least one symbol is on a watchlist, and supervisord gives
+      # up restarting it (FATAL) after a few such exits — seed first, then
+      # explicitly restart it, exactly like a real first deploy would.
+      - name: Seed a symbol and start ingest
+        run: |
+          docker exec tapehouse php artisan db:seed --force
+          docker exec tapehouse supervisorctl -c /etc/supervisord.conf restart ingest
+
+      - name: Assert all five supervisor programs are RUNNING
+        run: |
+          for i in $(seq 1 20); do
+            STATUS=$(docker exec tapehouse supervisorctl -c /etc/supervisord.conf status)
+            if [ "$(echo "$STATUS" | grep -c RUNNING)" -eq 5 ]; then
+              echo "$STATUS"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::expected all 5 supervisor programs RUNNING"
+          echo "$STATUS"
+          docker logs tapehouse
+          exit 1
+
+      - name: Assert /login returns 200
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/login)
+          echo "GET /login -> $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::expected /login to return 200, got $CODE"
+            docker logs tapehouse
+            exit 1
+          fi
+
+      - name: Container logs
+        if: always()
+        run: docker logs tapehouse
