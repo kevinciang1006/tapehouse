@@ -38,3 +38,27 @@ it('states plainly that the demo runs on a trial key', function (): void {
     // polling rather than discovering it as a fault.
     get('/login')->assertOk()->assertSee('polling', false);
 });
+
+it('puts the demo credentials on the login screen', function (): void {
+    // This link gets opened cold — from a phone, or forwarded without the
+    // email body — so it has to work standalone without a separate message
+    // carrying the password.
+    get('/login')->assertOk()->assertSee('operator@tapehouse.dev / tapehouse', false);
+});
+
+it('shows the Stop feed button outside production', function (): void {
+    actingAs(User::factory()->create());
+
+    get('/')->assertOk()->assertSee('id="stop-feed-btn"', false);
+});
+
+it('hides the Stop feed button in production', function (): void {
+    // The control flag is one Redis key shared by every visitor to the
+    // public demo, not a per-session toggle — see FeedControl. Hiding the
+    // button here is the UI half of that lock; OpsApiTest covers the
+    // backend half.
+    app()['env'] = 'production';
+    actingAs(User::factory()->create());
+
+    get('/')->assertOk()->assertDontSee('id="stop-feed-btn"', false);
+});
