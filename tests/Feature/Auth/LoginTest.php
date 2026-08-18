@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\get;
 use function Pest\Laravel\post;
 
 it('logs an operator in with valid credentials', function (): void {
@@ -36,6 +37,21 @@ it('logs an operator out', function (): void {
     post('/logout')->assertRedirect('/login');
 
     expect(auth()->check())->toBeFalse();
+});
+
+it('generates an https login form action behind a TLS-terminating proxy', function (): void {
+    // Railway (and this app's production deploy generally) terminates TLS
+    // at the edge and forwards to the container over plain HTTP, setting
+    // X-Forwarded-Proto to say so. Without trustProxies() in
+    // bootstrap/app.php, Laravel reads the raw (http) scheme of the
+    // forwarded request and generates every URL — including this form's
+    // action — as http://, which a browser on the https:// page blocks as
+    // mixed content the moment the form submits.
+    get('/login', ['X-Forwarded-Proto' => 'https'])
+        ->assertOk()
+        ->assertSee('action="'.route('login').'"', false);
+
+    expect(route('login'))->toStartWith('https://');
 });
 
 it('throttles rapid login attempts', function (): void {
