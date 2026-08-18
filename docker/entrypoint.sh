@@ -23,6 +23,16 @@ fi
 # confirmation, which has nothing to answer it inside a container.
 php artisan migrate --force
 
+# First-boot seed only: an empty users table means this is a fresh
+# database (first deploy, or a new environment), so seed it. Any
+# subsequent boot has at least the seeded/created operator account and
+# skips this — migrate --force above is safe to rerun every boot,
+# db:seed is not.
+if [ "$(php artisan tinker --execute='echo App\Models\User::count();' 2>/dev/null | tr -d '[:space:]')" = "0" ]; then
+    echo "seeding database"
+    php artisan db:seed --force
+fi
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
