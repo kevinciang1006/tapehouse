@@ -20,6 +20,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Railway terminates TLS at the edge and forwards to this container
+        // over plain HTTP, setting X-Forwarded-* headers to say so. Without
+        // trusting that proxy, Laravel reads the raw (http) request scheme
+        // and builds every generated URL — including form actions — as
+        // http://, which a browser on the https:// page blocks as mixed
+        // content. `at: '*'` trusts the immediate proxy hop regardless of
+        // its IP, which is correct here because Railway's edge is the only
+        // thing that can reach this container.
+        $middleware->trustProxies(at: '*');
+
         // The API is session-authenticated by a first-party console, not a
         // token API. Laravel's `api` group is stateless by default, so
         // auth:web there reads an unstarted session and every request from a

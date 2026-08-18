@@ -9,6 +9,7 @@ use App\Models\Watchlist;
 use App\Policies\AlertRulePolicy;
 use App\Policies\WatchlistPolicy;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -28,5 +29,13 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(Watchlist::class, WatchlistPolicy::class);
         Gate::policy(AlertRule::class, AlertRulePolicy::class);
+
+        // Belt-and-suspenders alongside bootstrap/app.php's trustProxies():
+        // that's the actual fix for Railway's HTTP-behind-TLS edge, this is
+        // a cheap fallback in case X-Forwarded-Proto is ever stripped
+        // between the edge and this container.
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
     }
 }
