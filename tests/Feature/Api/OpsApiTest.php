@@ -107,3 +107,22 @@ it('records a feed event when an operator stops the feed', function (): void {
     // who asked for it.
     expect(FeedEvent::where('type', 'feed.stop_requested')->count())->toBe(1);
 });
+
+it('refuses to stop or start the feed when FeedControl is locked', function (string $uri): void {
+    // Production is the public demo: the control flag is one Redis key
+    // shared by every visitor, not a per-session toggle, so anyone with the
+    // credentials on the login screen could otherwise kill the feed for
+    // everyone after them. TapehouseServiceProvider binds FeedControl
+    // locked in production; rebind it directly here rather than flipping
+    // app()->environment(), which would also disable the CSRF middleware's
+    // runningUnitTests() bypass and fail the request for an unrelated
+    // reason before it ever reaches the controller.
+    app()->instance(FeedControl::class, new FeedControl(Redis::connection(), locked: true));
+
+    actingAs(User::factory()->create());
+
+    postJson($uri)->assertForbidden();
+})->with([
+    '/api/ops/feed/stop',
+    '/api/ops/feed/start',
+]);

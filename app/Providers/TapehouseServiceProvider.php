@@ -31,7 +31,9 @@ class TapehouseServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(FeedControl::class, fn ($app): FeedControl => new FeedControl($this->redis($app)));
+        $this->app->singleton(FeedControl::class, function ($app): FeedControl {
+            return new FeedControl($this->redis($app), locked: $app->environment('production'));
+        });
 
         $this->app->singleton(QuoteCache::class, fn ($app): QuoteCache => new QuoteCache($this->redis($app)));
 

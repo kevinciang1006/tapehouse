@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Control;
 
+use App\Services\Control\Exceptions\FeedControlLockedException;
 use Illuminate\Redis\Connections\Connection;
 
 /**
@@ -21,20 +22,40 @@ final readonly class FeedControl
 
     private const RUNNING = 'running';
 
-    public function __construct(private Connection $redis) {}
+    /**
+     * @param  bool  $locked  True in production (see TapehouseServiceProvider):
+     *                        the flag is one Redis key shared by every visitor,
+     *                        so any operator can stop the feed for everyone
+     *                        else on the public demo. stop()/start() refuse to
+     *                        run rather than let that happen; isStopped() stays
+     *                        readable regardless.
+     */
+    public function __construct(
+        private Connection $redis,
+        private bool $locked = false,
+    ) {}
 
     public function stop(): void
     {
+        $this->guardLocked();
         $this->redis->set(self::KEY, self::STOPPED);
     }
 
     public function start(): void
     {
+        $this->guardLocked();
         $this->redis->set(self::KEY, self::RUNNING);
     }
 
     public function isStopped(): bool
     {
         return $this->redis->get(self::KEY) === self::STOPPED;
+    }
+
+    private function guardLocked(): void
+    {
+        if ($this->locked) {
+            throw new FeedControlLockedException('Feed control is locked on this demo instance.');
+        }
     }
 }

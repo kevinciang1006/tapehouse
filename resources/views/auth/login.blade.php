@@ -42,7 +42,7 @@
             <button type="submit" class="btn btn--signal auth-card__submit">Sign in</button>
         </form>
 
-        <div class="auth-card__footnote">Demo instance running on a Twelve Data trial key. Streaming falls back to polling when credits run out.</div>
+        <div class="auth-card__footnote">Demo instance. Sign in with operator@tapehouse.dev / tapehouse. Running on a Twelve Data trial key, so the feed falls back to polling when streaming credits run out.</div>
     </div>
 </div>
 @endsection

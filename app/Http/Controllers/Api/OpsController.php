@@ -9,6 +9,7 @@ use App\Enums\FeedEventLevel;
 use App\Http\Controllers\Controller;
 use App\Models\FeedEvent;
 use App\Services\Budget\CreditBudget;
+use App\Services\Control\Exceptions\FeedControlLockedException;
 use App\Services\Control\FeedControl;
 use App\Services\Metrics\FeedMetrics;
 use App\Services\Upstream\DriverStateReader;
@@ -60,7 +61,12 @@ class OpsController extends Controller
 
     public function stop(Request $request, FeedControl $control): JsonResponse
     {
-        $control->stop();
+        try {
+            $control->stop();
+        } catch (FeedControlLockedException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+
         $this->audit($request, 'feed.stop_requested', 'feed stopped by operator');
 
         return response()->json(['data' => ['stopped' => true]]);
@@ -68,7 +74,12 @@ class OpsController extends Controller
 
     public function start(Request $request, FeedControl $control): JsonResponse
     {
-        $control->start();
+        try {
+            $control->start();
+        } catch (FeedControlLockedException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+
         $this->audit($request, 'feed.start_requested', 'feed started by operator');
 
         return response()->json(['data' => ['stopped' => false]]);

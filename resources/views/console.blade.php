@@ -24,7 +24,13 @@
                 <div class="label">lag</div>
                 <div id="lag-text" class="num"></div>
             </div>
-            <button type="button" id="stop-feed-btn" class="btn btn--ghost">Stop feed</button>
+            {{-- Locked in production alongside FeedControl (see TapehouseServiceProvider):
+                 the control flag is one Redis key shared by every visitor to this
+                 public demo, not a per-session toggle, so the button is hidden
+                 rather than left to 403 on click. --}}
+            @unless (app()->environment('production'))
+                <button type="button" id="stop-feed-btn" class="btn btn--ghost">Stop feed</button>
+            @endunless
         </div>
     </div>
 
